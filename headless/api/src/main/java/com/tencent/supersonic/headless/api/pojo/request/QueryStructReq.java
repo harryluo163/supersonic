@@ -1,5 +1,6 @@
 package com.tencent.supersonic.headless.api.pojo.request;
 
+
 import com.google.common.collect.Lists;
 import com.tencent.supersonic.common.pojo.Aggregator;
 import com.tencent.supersonic.common.pojo.Constants;
@@ -11,7 +12,11 @@ import com.tencent.supersonic.common.pojo.enums.QueryType;
 import com.tencent.supersonic.common.util.ContextUtils;
 import com.tencent.supersonic.common.util.DateModeUtils;
 import com.tencent.supersonic.common.util.SqlFilterUtils;
-import com.tencent.supersonic.common.util.jsqlparser.SqlParserAddHelper;
+import com.tencent.supersonic.common.util.jsqlparser.SqlAddHelper;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import net.sf.jsqlparser.JSQLParserException;
@@ -26,26 +31,19 @@ import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.select.GroupByElement;
 import net.sf.jsqlparser.statement.select.Limit;
 import net.sf.jsqlparser.statement.select.OrderByElement;
+import net.sf.jsqlparser.statement.select.ParenthesedSelect;
 import net.sf.jsqlparser.statement.select.PlainSelect;
-import net.sf.jsqlparser.statement.select.Select;
-import net.sf.jsqlparser.statement.select.SelectExpressionItem;
 import net.sf.jsqlparser.statement.select.SelectItem;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.springframework.util.CollectionUtils;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
-
 
 @Data
 @Slf4j
 public class QueryStructReq extends SemanticQueryReq {
 
-    private String modelName;
     private List<String> groups = new ArrayList<>();
     private List<Aggregator> aggregators = new ArrayList<>();
     private List<Order> orders = new ArrayList<>();
@@ -54,16 +52,7 @@ public class QueryStructReq extends SemanticQueryReq {
     private DateConf dateInfo;
     private Long limit = 2000L;
     private QueryType queryType = QueryType.ID;
-
-
-    /**
-     * Later deleted for compatibility only
-     */
-    private String s2SQL;
-    /**
-     * Later deleted for compatibility only
-     */
-    private String correctS2SQL;
+    private boolean convertToSql = true;
 
     public List<String> getGroups() {
         if (!CollectionUtils.isEmpty(this.groups)) {
@@ -94,7 +83,9 @@ public class QueryStructReq extends SemanticQueryReq {
 
     public String toCustomizedString() {
         StringBuilder stringBuilder = new StringBuilder("{");
-        stringBuilder.append("\"modelId\":")
+        stringBuilder.append("\"dataSetId\":")
+                .append(dataSetId);
+        stringBuilder.append("\"modelIds\":")
                 .append(modelIds);
         stringBuilder.append(",\"groups\":")
                 .append(groups);
@@ -125,7 +116,9 @@ public class QueryStructReq extends SemanticQueryReq {
     @Override
     public String toString() {
         final StringBuilder sb = new StringBuilder("{");
-        sb.append("\"modelId\":")
+        sb.append("\"dataSetId\":")
+                .append(dataSetId);
+        sb.append("\"modelIds\":")
                 .append(modelIds);
         sb.append(",\"groups\":")
                 .append(groups);
@@ -149,40 +142,40 @@ public class QueryStructReq extends SemanticQueryReq {
         return sb.toString();
     }
 
-    public QuerySqlReq convert(QueryStructReq queryStructReq) {
-        return convert(queryStructReq, false);
+    public QuerySqlReq convert() {
+        return convert(false);
     }
 
     /**
-     * convert queryStructReq to QueryS2QLReq
+     * convert queryStructReq to QueryS2SQLReq
      *
-     * @param queryStructReq
      * @return
      */
-    public QuerySqlReq convert(QueryStructReq queryStructReq, boolean isBizName) {
+    public QuerySqlReq convert(boolean isBizName) {
         String sql = null;
         try {
-            sql = buildSql(queryStructReq, isBizName);
+            sql = buildSql(this, isBizName);
         } catch (Exception e) {
             log.error("buildSql error", e);
         }
 
         QuerySqlReq result = new QuerySqlReq();
         result.setSql(sql);
-        result.setModelIds(queryStructReq.getModelIdSet());
+        result.setDataSetId(this.getDataSetId());
+        result.setModelIds(this.getModelIdSet());
         result.setParams(new ArrayList<>());
         return result;
     }
 
     private String buildSql(QueryStructReq queryStructReq, boolean isBizName) throws JSQLParserException {
-        Select select = new Select();
+        ParenthesedSelect select = new ParenthesedSelect();
         //1.Set the select items (columns)
         PlainSelect plainSelect = new PlainSelect();
-        List<SelectItem> selectItems = new ArrayList<>();
+        List<SelectItem<?>> selectItems = new ArrayList<>();
         List<String> groups = queryStructReq.getGroups();
         if (!CollectionUtils.isEmpty(groups)) {
             for (String group : groups) {
-                selectItems.add(new SelectExpressionItem(new Column(group)));
+                selectItems.add(new SelectItem(new Column(group)));
             }
         }
         List<Aggregator> aggregators = queryStructReq.getAggregators();
@@ -190,7 +183,7 @@ public class QueryStructReq extends SemanticQueryReq {
             for (Aggregator aggregator : aggregators) {
                 String columnName = aggregator.getColumn();
                 if (queryStructReq.getQueryType().isNativeAggQuery()) {
-                    selectItems.add(new SelectExpressionItem(new Column(columnName)));
+                    selectItems.add(new SelectItem(new Column(columnName)));
                 } else {
                     Function sumFunction = new Function();
                     AggOperatorEnum func = aggregator.getFunc();
@@ -203,15 +196,16 @@ public class QueryStructReq extends SemanticQueryReq {
                         sumFunction.setDistinct(true);
                     }
                     sumFunction.setParameters(new ExpressionList(new Column(columnName)));
-                    SelectExpressionItem selectExpressionItem = new SelectExpressionItem(sumFunction);
-                    selectExpressionItem.setAlias(new Alias(columnName));
+                    SelectItem selectExpressionItem = new SelectItem(sumFunction);
+                    String alias = StringUtils.isNotBlank(aggregator.getAlias()) ? aggregator.getAlias() : columnName;
+                    selectExpressionItem.setAlias(new Alias(alias));
                     selectItems.add(selectExpressionItem);
                 }
             }
         }
         plainSelect.setSelectItems(selectItems);
         //2.Set the table name
-        Table table = new Table(queryStructReq.getModelName());
+        Table table = new Table(queryStructReq.getTableName());
         plainSelect.setFromItem(table);
 
         //3.Set the order by clause
@@ -248,7 +242,9 @@ public class QueryStructReq extends SemanticQueryReq {
             limit.setRowCount(new LongValue(queryStructReq.getLimit()));
             plainSelect.setLimit(limit);
         }
-        select.setSelectBody(plainSelect);
+        //select.setSelectBody(plainSelect);
+        select.setSelect(plainSelect);
+
 
         //6.Set where
         List<Filter> dimensionFilters = queryStructReq.getDimensionFilters();
@@ -258,7 +254,7 @@ public class QueryStructReq extends SemanticQueryReq {
         String sql = select.toString();
         if (StringUtils.isNotBlank(whereClause)) {
             Expression expression = CCJSqlParserUtil.parseCondExpression(whereClause);
-            sql = SqlParserAddHelper.addWhere(sql, expression);
+            sql = SqlAddHelper.addWhere(sql, expression);
         }
 
         //7.Set DateInfo
@@ -266,14 +262,19 @@ public class QueryStructReq extends SemanticQueryReq {
         String dateWhereStr = dateModeUtils.getDateWhereStr(queryStructReq.getDateInfo());
         if (StringUtils.isNotBlank(dateWhereStr)) {
             Expression expression = CCJSqlParserUtil.parseCondExpression(dateWhereStr);
-            sql = SqlParserAddHelper.addWhere(sql, expression);
+            sql = SqlAddHelper.addWhere(sql, expression);
         }
         return sql;
     }
 
-    public String getModelName() {
-        return Objects.nonNull(modelName) ? modelName :
-                Constants.TABLE_PREFIX + StringUtils.join(modelIds, "_");
+    public String getTableName() {
+        if (StringUtils.isNotBlank(dataSetName)) {
+            return dataSetName;
+        }
+        if (dataSetId != null) {
+            return Constants.TABLE_PREFIX + dataSetId;
+        }
+        return Constants.TABLE_PREFIX + StringUtils.join(modelIds, "_");
     }
 
 }

@@ -1,5 +1,5 @@
-import type { ActionType, ProColumns } from '@ant-design/pro-table';
-import ProTable from '@ant-design/pro-table';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ProTable } from '@ant-design/pro-components';
 import { message, Button, Space, Popconfirm } from 'antd';
 import React, { useRef, useState, useEffect } from 'react';
 import DatabaseSettingModal from './DatabaseSettingModal';
@@ -120,7 +120,7 @@ const DatabaseTable: React.FC<Props> = ({}) => {
   return (
     <div style={{ margin: 20 }}>
       <ProTable
-        className={`${styles.classTable} ${styles.classTableSelectColumnAlignLeft}`}
+        // className={`${styles.classTable}`}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}

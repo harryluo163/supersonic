@@ -1,8 +1,8 @@
 package com.tencent.supersonic.chat.server.processor.parse;
 
-import com.tencent.supersonic.chat.core.pojo.ChatContext;
-import com.tencent.supersonic.chat.core.pojo.QueryContext;
-import com.tencent.supersonic.chat.api.pojo.response.ParseResp;
+
+import com.tencent.supersonic.chat.server.pojo.ChatParseContext;
+import com.tencent.supersonic.headless.api.pojo.response.ParseResp;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -12,7 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TimeCostProcessor implements ParseResultProcessor {
 
     @Override
-    public void process(ParseResp parseResp, QueryContext queryContext, ChatContext chatContext) {
+    public void process(ChatParseContext chatParseContext, ParseResp parseResp) {
         long parseStartTime = parseResp.getParseTimeCost().getParseStartTime();
         parseResp.getParseTimeCost().setParseTime(
                 System.currentTimeMillis() - parseStartTime - parseResp.getParseTimeCost().getSqlTime());

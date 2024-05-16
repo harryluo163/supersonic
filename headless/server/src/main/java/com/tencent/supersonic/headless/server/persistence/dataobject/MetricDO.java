@@ -80,17 +80,17 @@ public class MetricDO {
     private String dataFormat;
 
     /**
-     * 
+     *
      */
     private String alias;
 
     /**
-     * 
+     *
      */
-    private String tags;
+    private String classifications;
 
     /**
-     * 
+     *
      */
     private String relateDimensions;
 
@@ -102,5 +102,7 @@ public class MetricDO {
     private String ext;
 
     private String defineType;
+
+    private Integer isPublish;
 
 }

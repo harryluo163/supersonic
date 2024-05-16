@@ -17,13 +17,20 @@ import {
   Tooltip,
   Tag,
 } from 'antd';
+import { StatusEnum } from '../enum';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import MetricMeasuresFormTable from './MetricMeasuresFormTable';
-import { SENSITIVE_LEVEL_OPTIONS, METRIC_DEFINE_TYPE } from '../constant';
+import { SENSITIVE_LEVEL_OPTIONS, METRIC_DEFINE_TYPE, TAG_DEFINE_TYPE } from '../constant';
 import { formLayout } from '@/components/FormHelper/utils';
 import FormItemTitle from '@/components/FormHelper/FormItemTitle';
 import styles from './style.less';
-import { getMetricsToCreateNewMetric, getModelDetail } from '../service';
+import {
+  getMetricsToCreateNewMetric,
+  getModelDetail,
+  getDrillDownDimension,
+  batchCreateTag,
+  batchDeleteTag,
+} from '../service';
 import MetricMetricFormTable from './MetricMetricFormTable';
 import MetricFieldFormTable from './MetricFieldFormTable';
 import DimensionAndMetricRelationModal from './DimensionAndMetricRelationModal';
@@ -31,7 +38,6 @@ import TableTitleTooltips from '../components/TableTitleTooltips';
 import { createMetric, updateMetric, mockMetricAlias, getMetricTags } from '../service';
 import { ISemantic } from '../data';
 import { history } from 'umi';
-import { cloneDeep } from 'lodash';
 
 export type CreateFormProps = {
   datasourceId?: number;
@@ -101,7 +107,7 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
   const [defineType, setDefineType] = useState(METRIC_DEFINE_TYPE.MEASURE);
 
   const [createNewMetricList, setCreateNewMetricList] = useState<ISemantic.IMetricItem[]>([]);
-  const [fieldList, setFieldList] = useState<string[]>([]);
+  const [fieldList, setFieldList] = useState<ISemantic.IFieldTypeParamsItem[]>([]);
   const [isPercentState, setIsPercentState] = useState<boolean>(false);
   const [isDecimalState, setIsDecimalState] = useState<boolean>(false);
   const [hasMeasuresState, setHasMeasuresState] = useState<boolean>(true);
@@ -113,20 +119,80 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
 
   const [drillDownDimensions, setDrillDownDimensions] = useState<
     ISemantic.IDrillDownDimensionItem[]
-  >(metricItem?.relateDimension?.drillDownDimensions || []);
+  >([]);
+
+  const [drillDownDimensionsConfig, setDrillDownDimensionsConfig] = useState<
+    ISemantic.IDrillDownDimensionItem[]
+  >([]);
 
   const forward = () => setCurrentStep(currentStep + 1);
   const backward = () => setCurrentStep(currentStep - 1);
 
   const queryModelDetail = async () => {
-    // const { code, data } = await getMeasureListByModelId(modelId);
     const { code, data } = await getModelDetail({ modelId: modelId || metricItem?.modelId });
     if (code === 200) {
       if (Array.isArray(data?.modelDetail?.fields)) {
-        setFieldList(data.modelDetail.fields);
+        if (Array.isArray(metricItem?.metricDefineByFieldParams?.fields)) {
+          const fieldList = data.modelDetail.fields.map((item: ISemantic.IFieldTypeParamsItem) => {
+            const { fieldName } = item;
+            if (
+              metricItem?.metricDefineByFieldParams?.fields.find(
+                (measureParamsItem: ISemantic.IFieldTypeParamsItem) =>
+                  measureParamsItem.fieldName === fieldName,
+              )
+            ) {
+              return {
+                ...item,
+                orderNumber: 9999,
+              };
+            }
+            return {
+              ...item,
+              orderNumber: 0,
+            };
+          });
+
+          const sortList = fieldList.sort(
+            (
+              a: ISemantic.IFieldTypeParamsItem & { orderNumber: number },
+              b: ISemantic.IFieldTypeParamsItem & { orderNumber: number },
+            ) => b.orderNumber - a.orderNumber,
+          );
+          setFieldList(sortList);
+        } else {
+          setFieldList(data.modelDetail.fields);
+        }
       }
       if (Array.isArray(data?.modelDetail?.measures)) {
-        setClassMeasureList(data.modelDetail.measures);
+        if (Array.isArray(metricItem?.metricDefineByMeasureParams?.measures)) {
+          const measureList = data.modelDetail.measures.map((item: ISemantic.IMeasure) => {
+            const { bizName } = item;
+            if (
+              metricItem?.metricDefineByMeasureParams?.measures.find(
+                (measureParamsItem: ISemantic.IMeasure) => measureParamsItem.bizName === bizName,
+              )
+            ) {
+              return {
+                ...item,
+                orderNumber: 9999,
+              };
+            }
+            return {
+              ...item,
+              orderNumber: 0,
+            };
+          });
+          const sortMeasureList = measureList.sort(
+            (
+              a: ISemantic.IMeasure & { orderNumber: number },
+              b: ISemantic.IMeasure & { orderNumber: number },
+            ) => b.orderNumber - a.orderNumber,
+          );
+          setClassMeasureList(sortMeasureList);
+        } else {
+          setClassMeasureList(data.modelDetail.measures);
+        }
+
         if (datasourceId) {
           const hasMeasures = data.some(
             (item: ISemantic.IMeasure) => item.datasourceId === datasourceId,
@@ -137,6 +203,17 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
       }
     }
     setClassMeasureList([]);
+  };
+
+  const queryDrillDownDimension = async (metricId: number) => {
+    const { code, data, msg } = await getDrillDownDimension(metricId);
+    if (code === 200 && Array.isArray(data)) {
+      setDrillDownDimensionsConfig(data);
+    }
+    if (code !== 200) {
+      message.error(msg);
+    }
+    return [];
   };
 
   useEffect(() => {
@@ -169,10 +246,11 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
       description,
       sensitiveLevel,
       typeParams,
+      isTag,
       dataFormat,
       dataFormatType,
       alias,
-      tags,
+      classifications,
       metricDefineType,
       metricDefineByMeasureParams,
       metricDefineByMetricParams,
@@ -186,7 +264,8 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
       bizName,
       sensitiveLevel,
       description,
-      tags,
+      classifications,
+      isTag,
       // isPercent,
       dataFormatType: dataFormatType || '',
       alias: alias && alias.trim() ? alias.split(',') : [],
@@ -234,6 +313,7 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
     setDefineType(metricDefineType);
     setIsPercentState(isPercent);
     setIsDecimalState(isDecimal);
+    queryDrillDownDimension(metricItem?.id);
   };
 
   useEffect(() => {
@@ -299,10 +379,41 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
     if (queryParams.id) {
       saveMetricQuery = updateMetric;
     }
-    const { code, msg } = await saveMetricQuery(queryParams);
+    const { code, msg, data } = await saveMetricQuery(queryParams);
     if (code === 200) {
+      if (queryParams.isTag) {
+        queryBatchExportTag(data.id || metricItem?.id);
+      }
+
+      if (metricItem?.id && !queryParams.isTag) {
+        queryBatchDelete(metricItem);
+      }
       message.success('编辑指标成功');
       onSubmit?.(queryParams);
+      return;
+    }
+    message.error(msg);
+  };
+
+  const queryBatchDelete = async (metricItem: ISemantic.IMetricItem) => {
+    const { code, msg } = await batchDeleteTag([
+      {
+        itemIds: [metricItem.id],
+        tagDefineType: TAG_DEFINE_TYPE.METRIC,
+      },
+    ]);
+    if (code === 200) {
+      return;
+    }
+    message.error(msg);
+  };
+
+  const queryBatchExportTag = async (id: number) => {
+    const { code, msg } = await batchCreateTag([
+      { itemId: id, tagDefineType: TAG_DEFINE_TYPE.METRIC },
+    ]);
+
+    if (code === 200) {
       return;
     }
     message.error(msg);
@@ -323,7 +434,6 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
   const queryMetricTags = async () => {
     const { code, data } = await getMetricTags();
     if (code === 200) {
-      // form.setFieldValue('alias', Array.from(new Set([...formAlias, ...data])));
       setTagOptions(
         Array.isArray(data)
           ? data.map((tag: string) => {
@@ -340,7 +450,36 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
       modelId: modelId || metricItem?.modelId,
     });
     if (code === 200) {
-      setCreateNewMetricList(data);
+      if (Array.isArray(metricItem?.metricDefineByMetricParams?.metrics)) {
+        const fieldList = data.map((item: ISemantic.IMetricTypeParamsItem) => {
+          const { bizName } = item;
+          if (
+            metricItem?.metricDefineByMetricParams?.metrics.find(
+              (measureParamsItem: ISemantic.IMetricTypeParamsItem) =>
+                measureParamsItem.bizName === bizName,
+            )
+          ) {
+            return {
+              ...item,
+              orderNumber: 9999,
+            };
+          }
+          return {
+            ...item,
+            orderNumber: 0,
+          };
+        });
+
+        const sortList = fieldList.sort(
+          (
+            a: ISemantic.IMetricTypeParamsItem & { orderNumber: number },
+            b: ISemantic.IMetricTypeParamsItem & { orderNumber: number },
+          ) => b.orderNumber - a.orderNumber,
+        );
+        setCreateNewMetricList(sortList);
+      } else {
+        setCreateNewMetricList(data);
+      }
     } else {
       message.error('获取指标标签失败');
     }
@@ -375,6 +514,7 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
                 typeParams={exprTypeParamsState[METRIC_DEFINE_TYPE.MEASURE]}
                 measuresList={classMeasureList}
                 onFieldChange={(measures: ISemantic.IMeasure[]) => {
+                  // setClassMeasureList(measures);
                   setExprTypeParamsState((prevState) => {
                     return {
                       ...prevState,
@@ -402,15 +542,11 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
           {defineType === METRIC_DEFINE_TYPE.METRIC && (
             <>
               <p className={styles.desc}>
-                通过
+                基于
                 <Tag color="#2499ef14" className={styles.markerTag}>
-                  字段
+                  已有
                 </Tag>
-                和
-                <Tag color="#2499ef14" className={styles.markerTag}>
-                  度量
-                </Tag>
-                创建的指标可用来创建新的指标
+                指标来衍生新的指标
               </p>
 
               <MetricMetricFormTable
@@ -528,10 +664,10 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
             )}
           </Row>
         </FormItem>
-        <FormItem name="tags" label="标签">
+        <FormItem name="classifications" label="分类">
           <Select
             mode="tags"
-            placeholder="输入别名后回车确认，多别名输入、复制粘贴支持英文逗号自动分隔"
+            placeholder="输入分类名后回车确认，多别名输入、复制粘贴支持英文逗号自动分隔"
             tokenSeparators={[',']}
             maxTagCount={9}
             options={tagOptions}
@@ -576,6 +712,28 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
         >
           <TextArea placeholder="请输入业务口径" />
         </FormItem>
+
+        <Form.Item
+          label={
+            <FormItemTitle
+              title={`设为标签`}
+              subTitle={`如果勾选，代表取值都是一种'标签'，可用作对实体的圈选`}
+            />
+          }
+          name="isTag"
+          valuePropName="checked"
+          getValueFromEvent={(value) => {
+            return value === true ? 1 : 0;
+          }}
+          getValueProps={(value) => {
+            return {
+              checked: value === 1,
+            };
+          }}
+        >
+          <Switch />
+        </Form.Item>
+
         <FormItem
           label={
             <FormItemTitle
@@ -686,7 +844,7 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
         <>
           <Steps style={{ marginBottom: 28 }} size="small" current={currentStep}>
             <Step title="基本信息" />
-            <Step title="度量信息" />
+            <Step title="表达式" />
           </Steps>
           <Form
             {...formLayout}
@@ -719,7 +877,7 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
           </Form>
           <DimensionAndMetricRelationModal
             metricItem={metricItem}
-            relationsInitialValue={drillDownDimensions}
+            relationsInitialValue={drillDownDimensionsConfig}
             open={metricRelationModalOpenState}
             onCancel={() => {
               setMetricRelationModalOpenState(false);
@@ -727,6 +885,9 @@ const MetricInfoCreateForm: React.FC<CreateFormProps> = ({
             onSubmit={(relations) => {
               setDrillDownDimensions(relations);
               setMetricRelationModalOpenState(false);
+            }}
+            onRefreshRelationData={() => {
+              queryDrillDownDimension(metricItem?.id);
             }}
           />
         </>

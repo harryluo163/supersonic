@@ -1,4 +1,4 @@
-import { Tag, Space, Tooltip } from 'antd';
+import { Tag, Space, Tooltip, Typography } from 'antd';
 import React from 'react';
 import { connect } from 'umi';
 import type { StateType } from '../model';
@@ -11,12 +11,14 @@ import {
   PartitionOutlined,
   PlusOutlined,
   AreaChartOutlined,
-  DeleteOutlined,
 } from '@ant-design/icons';
 import styles from './style.less';
+import { isString } from 'lodash';
 import { SENSITIVE_LEVEL_ENUM, SENSITIVE_LEVEL_COLOR } from '../constant';
 import { ISemantic } from '../data';
-import MetricStar from './components/MetricStar';
+import IndicatorStar from '../components/IndicatorStar';
+
+const { Text } = Typography;
 
 type Props = {
   metircData: ISemantic.IMetricItem;
@@ -38,9 +40,8 @@ const MetricInfoSider: React.FC<Props> = ({
       <div className={styles.title}>
         <div className={styles.name}>
           <Space>
-            <MetricStar metricId={metircData?.id} initState={metircData?.isCollect} />
+            <IndicatorStar indicatorId={metircData?.id} initState={metircData?.isCollect} />
             {metircData?.name}
-            {metircData?.alias && `[${metircData.alias}]`}
             {metircData?.hasAdminRes && (
               <span
                 className={styles.gotoMetricListIcon}
@@ -61,14 +62,14 @@ const MetricInfoSider: React.FC<Props> = ({
       <div className={styles.sectionContainer}>
         <hr className={styles.hr} />
         <div className={styles.section}>
-          <div className={styles.sectionTitleBox}>
+          {/* <div className={styles.sectionTitleBox}>
             <span className={styles.sectionTitle}>
               <Space>
                 <ContainerOutlined />
                 基本信息
               </Space>
             </span>
-          </div>
+          </div> */}
 
           <div className={styles.item}>
             <span className={styles.itemLable}>敏感度: </span>
@@ -105,6 +106,44 @@ const MetricInfoSider: React.FC<Props> = ({
               </Space>
             </span>
           </div>
+
+          {isArrayOfValues(metircData?.tags) && (
+            <div className={styles.item}>
+              <span className={styles.itemLable}>别名: </span>
+              <span className={styles.itemValue}>
+                <Space size={2} wrap>
+                  {isString(metircData?.alias) &&
+                    metircData?.alias.split(',').map((aliasName: string) => {
+                      return (
+                        <Tag
+                          color="#eee"
+                          key={aliasName}
+                          style={{
+                            borderRadius: 44,
+                            maxWidth: 90,
+                            minWidth: 40,
+                            backgroundColor: 'rgba(18, 31, 67, 0.04)',
+                          }}
+                        >
+                          <Text
+                            style={{
+                              maxWidth: 80,
+                              color: 'rgb(95, 116, 141)',
+                              textAlign: 'center',
+                              fontSize: 12,
+                            }}
+                            ellipsis={{ tooltip: aliasName }}
+                          >
+                            {aliasName}
+                          </Text>
+                        </Tag>
+                      );
+                    })}
+                </Space>
+              </span>
+            </div>
+          )}
+
           <div className={styles.item}>
             <span className={styles.itemLable}>描述: </span>
             <span className={styles.itemValue}>{metircData?.description}</span>
@@ -154,12 +193,12 @@ const MetricInfoSider: React.FC<Props> = ({
             </span>
           </div>
 
-          {isArrayOfValues(metircData?.tags) && (
+          {isArrayOfValues(metircData?.classifications) && (
             <div className={styles.item}>
-              <span className={styles.itemLable}>标签: </span>
+              <span className={styles.itemLable}>分类: </span>
               <span className={styles.itemValue}>
                 <Space size={2} wrap>
-                  {metircData?.tags.map((tag) => (
+                  {metircData?.classifications.map((tag) => (
                     <Tag color="blue" key={tag}>
                       {tag}
                     </Tag>

@@ -15,7 +15,7 @@ type Props = {
 
 const OverView: React.FC<Props> = ({ modelList, disabledEdit = false, onModelChange }) => {
   return (
-    <div style={{ padding: '20px' }}>
+    <div style={{ padding: '15px 20px' }}>
       <ModelTable modelList={modelList} disabledEdit={disabledEdit} onModelChange={onModelChange} />
     </div>
   );

@@ -7,7 +7,6 @@ import lombok.Data;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.util.CollectionUtils;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,20 +22,22 @@ public class MetricBaseReq extends SchemaItem {
 
     private DataFormat dataFormat;
 
-    private List<String> tags;
+    private List<String> classifications;
 
     private RelateDimension relateDimension;
 
-    private Map<String, Object> ext = new HashMap<>();
+    private int isTag;
 
-    public String getTag() {
-        if (tags == null) {
+    private Map<String, Object> ext;
+
+    public String getClassifications() {
+        if (classifications == null) {
             return null;
         }
-        if (CollectionUtils.isEmpty(tags)) {
+        if (CollectionUtils.isEmpty(classifications)) {
             return "";
         }
-        return StringUtils.join(tags, ",");
+        return StringUtils.join(classifications, ",");
     }
 
 }

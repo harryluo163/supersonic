@@ -8,8 +8,8 @@ import com.tencent.supersonic.headless.server.persistence.mapper.MetricDOMapper;
 import com.tencent.supersonic.headless.server.persistence.mapper.MetricQueryDefaultConfigDOMapper;
 import com.tencent.supersonic.headless.server.persistence.repository.MetricRepository;
 import com.tencent.supersonic.headless.server.pojo.MetricFilter;
+import com.tencent.supersonic.headless.server.pojo.MetricsFilter;
 import org.springframework.stereotype.Component;
-
 import java.util.List;
 
 
@@ -53,6 +53,21 @@ public class MetricRepositoryImpl implements MetricRepository {
     }
 
     @Override
+    public void batchPublish(List<MetricDO> metricDOS) {
+        metricDOCustomMapper.batchPublish(metricDOS);
+    }
+
+    @Override
+    public void batchUnPublish(List<MetricDO> metricDOS) {
+        metricDOCustomMapper.batchUnPublish(metricDOS);
+    }
+
+    @Override
+    public void updateClassificationsBatch(List<MetricDO> metricDOS) {
+        metricDOCustomMapper.updateClassificationsBatch(metricDOS);
+    }
+
+    @Override
     public MetricDO getMetricById(Long id) {
         return metricDOMapper.selectById(id);
     }
@@ -60,6 +75,11 @@ public class MetricRepositoryImpl implements MetricRepository {
     @Override
     public List<MetricDO> getMetric(MetricFilter metricFilter) {
         return metricDOCustomMapper.query(metricFilter);
+    }
+
+    @Override
+    public List<MetricDO> getMetrics(MetricsFilter metricsFilter) {
+        return metricDOCustomMapper.queryMetrics(metricsFilter);
     }
 
     @Override

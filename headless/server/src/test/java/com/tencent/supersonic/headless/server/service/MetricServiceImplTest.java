@@ -8,24 +8,27 @@ import com.tencent.supersonic.common.pojo.enums.SensitiveLevelEnum;
 import com.tencent.supersonic.common.pojo.enums.StatusEnum;
 import com.tencent.supersonic.common.pojo.enums.TypeEnums;
 import com.tencent.supersonic.common.util.ChatGptHelper;
-import com.tencent.supersonic.headless.api.pojo.enums.MetricDefineType;
-import com.tencent.supersonic.headless.api.pojo.enums.MetricType;
 import com.tencent.supersonic.headless.api.pojo.DrillDownDimension;
 import com.tencent.supersonic.headless.api.pojo.MeasureParam;
 import com.tencent.supersonic.headless.api.pojo.MetricDefineByMeasureParams;
 import com.tencent.supersonic.headless.api.pojo.RelateDimension;
+import com.tencent.supersonic.headless.api.pojo.enums.MetricDefineType;
+import com.tencent.supersonic.headless.api.pojo.enums.MetricType;
 import com.tencent.supersonic.headless.api.pojo.request.MetricReq;
 import com.tencent.supersonic.headless.api.pojo.response.MetricResp;
 import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
 import com.tencent.supersonic.headless.server.persistence.dataobject.MetricDO;
 import com.tencent.supersonic.headless.server.persistence.repository.MetricRepository;
+import com.tencent.supersonic.headless.server.service.impl.DataSetServiceImpl;
 import com.tencent.supersonic.headless.server.service.impl.MetricServiceImpl;
 import com.tencent.supersonic.headless.server.utils.MetricConverter;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.context.ApplicationEventPublisher;
+
 import java.util.HashMap;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -60,13 +63,16 @@ public class MetricServiceImplTest {
     }
 
     private MetricService mockMetricService(MetricRepository metricRepository,
-                                            ModelService modelService) {
-        DomainService domainService = Mockito.mock(DomainService.class);
+            ModelService modelService) {
         ChatGptHelper chatGptHelper = Mockito.mock(ChatGptHelper.class);
         CollectService collectService = Mockito.mock(CollectService.class);
         ApplicationEventPublisher eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
-        return new MetricServiceImpl(metricRepository, modelService, domainService,
-                chatGptHelper, collectService, eventPublisher);
+        DataSetService dataSetService = Mockito.mock(DataSetServiceImpl.class);
+        DimensionService dimensionService = Mockito.mock(DimensionService.class);
+        TagMetaService tagMetaService = Mockito.mock(TagMetaService.class);
+        MetaDiscoveryService metaDiscoveryService = Mockito.mock(MetaDiscoveryService.class);
+        return new MetricServiceImpl(metricRepository, modelService, chatGptHelper, collectService, dataSetService,
+                eventPublisher, dimensionService, tagMetaService, metaDiscoveryService);
     }
 
     private MetricReq buildMetricReq() {
@@ -89,12 +95,12 @@ public class MetricServiceImplTest {
                 new MeasureParam("s2_uv", "department='hr'")));
         typeParams.setExpr("s2_pv/s2_uv");
         metricReq.setMetricDefineByMeasureParams(typeParams);
-        metricReq.setTags(Lists.newArrayList("核心指标"));
+        metricReq.setClassifications(Lists.newArrayList("核心指标"));
         metricReq.setRelateDimension(
                 RelateDimension.builder().drillDownDimensions(Lists.newArrayList(
                         new DrillDownDimension(1L),
                         new DrillDownDimension(1L, false))
-        ).build());
+                ).build());
         metricReq.setSensitiveLevel(SensitiveLevelEnum.LOW.getCode());
         metricReq.setExt(new HashMap<>());
         return metricReq;
@@ -120,7 +126,7 @@ public class MetricServiceImplTest {
                 new MeasureParam("s2_uv", "department='hr'")));
         typeParams.setExpr("s2_pv/s2_uv");
         metricResp.setMetricDefineByMeasureParams(typeParams);
-        metricResp.setTags(Lists.newArrayList("核心指标"));
+        metricResp.setClassifications("核心指标");
         metricResp.setRelateDimension(
                 RelateDimension.builder().drillDownDimensions(Lists.newArrayList(
                         new DrillDownDimension(1L),

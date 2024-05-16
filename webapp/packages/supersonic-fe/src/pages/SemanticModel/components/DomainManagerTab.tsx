@@ -1,20 +1,24 @@
 import { Tabs, Breadcrumb, Space } from 'antd';
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { connect, history } from 'umi';
 
 import ClassDimensionTable from './ClassDimensionTable';
 import ClassMetricTable from './ClassMetricTable';
 import PermissionSection from './Permission/PermissionSection';
-import ChatSettingSection from '../ChatSetting/ChatSettingSection';
+// import ClassTagTable from '../Insights/components/ClassTagTable';
+import TagObjectTable from '../Insights/components/TagObjectTable';
+import TermTable from '../components/Term/TermTable';
 import OverView from './OverView';
 import styles from './style.less';
 import type { StateType } from '../model';
 import { HomeOutlined, FundViewOutlined } from '@ant-design/icons';
 import { ISemantic } from '../data';
 import SemanticGraphCanvas from '../SemanticGraphCanvas';
+// import HeadlessFlows from '../HeadlessFlows';
+// import SemanticFlows from '../SemanticFlows';
 import RecommendedQuestionsSection from '../components/Entity/RecommendedQuestionsSection';
-import CommonDimensionTable from './CommonDimension/CommonDimensionTable';
-import DatabaseTable from '../components/Database/DatabaseTable';
+import View from '../View';
+// import DatabaseTable from '../components/Database/DatabaseTable';
 
 import type { Dispatch } from 'umi';
 
@@ -37,16 +41,32 @@ const DomainManagerTab: React.FC<Props> = ({
   onBackDomainBtnClick,
   onMenuChange,
 }) => {
+  const initState = useRef<boolean>(false);
   const defaultTabKey = 'metric';
-  const { selectDomainId, domainList, selectModelId, selectModelName, selectDomainName } =
-    domainManger;
+  const {
+    selectDomainId,
+    selectModelId,
+    selectModelName,
+    selectDomainName,
+    domainData,
+    domainList,
+  } = domainManger;
+  useEffect(() => {
+    initState.current = false;
+  }, [selectModelId]);
+
+  const domainListParentIdList: number[] = Array.isArray(domainList)
+    ? Array.from(new Set(domainList.map((item) => item.parentId)))
+    : [];
 
   const tabItem = [
     {
       label: '模型管理',
       key: 'overview',
+      hidden: domainData && domainListParentIdList.includes(domainData.id),
       children: (
         <OverView
+          key={selectDomainId}
           modelList={modelList}
           onModelChange={(model) => {
             handleModelChange(model);
@@ -55,32 +75,52 @@ const DomainManagerTab: React.FC<Props> = ({
       ),
     },
     {
+      label: '数据集管理',
+      key: 'dataSetManage',
+      hidden: !!domainData?.parentId,
+      children: (
+        <View
+          modelList={modelList}
+          onModelChange={(model) => {
+            handleModelChange(model);
+          }}
+        />
+      ),
+    },
+    {
+      label: '标签对象管理',
+      key: 'tagObjectManage',
+      hidden: !!domainData?.parentId,
+      children: <TagObjectTable />,
+    },
+    {
+      label: '术语管理',
+      key: 'termManage',
+      hidden: !!domainData?.parentId,
+      children: <TermTable />,
+    },
+    {
       label: '画布',
       key: 'xflow',
+      hidden: domainData && domainListParentIdList.includes(domainData.id),
       children: (
         <div style={{ width: '100%' }}>
           <SemanticGraphCanvas />
+          {/* <HeadlessFlows /> */}
         </div>
       ),
     },
     {
       label: '权限管理',
       key: 'permissonSetting',
+      hidden: !!domainData?.parentId,
       children: <PermissionSection permissionTarget={'domain'} />,
     },
-    {
-      label: '数据库管理',
-      key: 'database',
-      children: <DatabaseTable />,
-    },
-    // {
-    //   label: '公共维度',
-    //   key: 'commonDimension',
-    //   children: <CommonDimensionTable />,
-    // },
   ].filter((item) => {
-    const target = domainList.find((domain) => domain.id === selectDomainId);
-    if (target?.hasEditPermission) {
+    if (item.hidden) {
+      return false;
+    }
+    if (domainData?.hasEditPermission) {
       return true;
     }
     return item.key !== 'permissonSetting';
@@ -88,37 +128,45 @@ const DomainManagerTab: React.FC<Props> = ({
 
   const isModelItem = [
     {
-      label: '指标',
+      label: '指标管理',
       key: 'metric',
-      children: <ClassMetricTable />,
+      children: (
+        <ClassMetricTable
+          onEmptyMetricData={() => {
+            if (!initState.current) {
+              initState.current = true;
+              onMenuChange?.('dimenstion');
+            }
+          }}
+        />
+      ),
     },
     {
-      label: '维度',
+      label: '维度管理',
       key: 'dimenstion',
       children: <ClassDimensionTable />,
     },
-
     {
       label: '权限管理',
       key: 'permissonSetting',
       children: <PermissionSection permissionTarget={'model'} />,
     },
     {
-      label: '问答设置',
-      key: 'chatSetting',
-      children: <ChatSettingSection />,
-    },
-    {
       label: '推荐问题',
       key: 'recommendedQuestions',
       children: <RecommendedQuestionsSection />,
     },
-  ].filter((item) => {
-    if (window.RUNNING_ENV === 'headless') {
-      return !['chatSetting', 'recommendedQuestions'].includes(item.key);
+  ];
+
+  const getActiveKey = () => {
+    const key = activeKey || defaultTabKey;
+    const tabItems = !isModel ? tabItem : isModelItem;
+    const tabItemsKeys = tabItems.map((item) => item.key);
+    if (!tabItemsKeys.includes(key)) {
+      return tabItemsKeys[0];
     }
-    return item;
-  });
+    return key;
+  };
 
   return (
     <>
@@ -127,13 +175,14 @@ const DomainManagerTab: React.FC<Props> = ({
         separator=""
         items={[
           {
-            path: `/webapp/model/${selectDomainId}/0/overview`,
             title: (
               <Space
                 onClick={() => {
                   onBackDomainBtnClick?.();
                 }}
-                style={selectModelName ? {} : { color: '#296df3', fontWeight: 'bold' }}
+                style={
+                  selectModelName ? { cursor: 'pointer' } : { color: '#296df3', fontWeight: 'bold' }
+                }
               >
                 <HomeOutlined />
                 <span>{selectDomainName}</span>
@@ -162,7 +211,7 @@ const DomainManagerTab: React.FC<Props> = ({
       <Tabs
         className={styles.tab}
         items={!isModel ? tabItem : isModelItem}
-        activeKey={activeKey || defaultTabKey}
+        activeKey={getActiveKey()}
         destroyInactiveTabPane
         size="large"
         onChange={(menuKey: string) => {

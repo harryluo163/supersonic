@@ -2,12 +2,14 @@ package com.tencent.supersonic.headless.server.service;
 
 import com.github.pagehelper.PageInfo;
 import com.tencent.supersonic.auth.api.authentication.pojo.User;
+import com.tencent.supersonic.common.pojo.DataEvent;
 import com.tencent.supersonic.common.pojo.enums.EventType;
 import com.tencent.supersonic.headless.api.pojo.DimValueMap;
 import com.tencent.supersonic.headless.api.pojo.request.DimensionReq;
 import com.tencent.supersonic.headless.api.pojo.request.MetaBatchReq;
 import com.tencent.supersonic.headless.api.pojo.request.PageDimensionReq;
 import com.tencent.supersonic.headless.api.pojo.response.DimensionResp;
+import com.tencent.supersonic.headless.server.pojo.DimensionsFilter;
 import com.tencent.supersonic.headless.server.pojo.MetaFilter;
 
 import java.util.List;
@@ -22,13 +24,15 @@ public interface DimensionService {
 
     void batchUpdateStatus(MetaBatchReq metaBatchReq, User user);
 
-    void createDimension(DimensionReq dimensionReq, User user) throws Exception;
+    DimensionResp createDimension(DimensionReq dimensionReq, User user) throws Exception;
 
     void createDimensionBatch(List<DimensionReq> dimensionReqs, User user) throws Exception;
 
     void updateDimension(DimensionReq dimensionReq, User user) throws Exception;
 
     PageInfo<DimensionResp> queryDimension(PageDimensionReq pageDimensionReq);
+
+    List<DimensionResp> queryDimensions(DimensionsFilter dimensionsFilter);
 
     void deleteDimension(Long id, User user);
 
@@ -39,4 +43,6 @@ public interface DimensionService {
     List<DimValueMap> mockDimensionValueAlias(DimensionReq dimensionReq, User user);
 
     void sendDimensionEventBatch(List<Long> modelIds, EventType eventType);
+
+    DataEvent getDataEvent();
 }

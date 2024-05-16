@@ -1,7 +1,7 @@
 package com.tencent.supersonic.headless.server.utils;
 
 import com.tencent.supersonic.common.pojo.exception.InvalidArgumentException;
-import com.tencent.supersonic.common.util.jsqlparser.SqlParserSelectFunctionHelper;
+import com.tencent.supersonic.common.util.jsqlparser.SqlSelectFunctionHelper;
 import com.tencent.supersonic.headless.api.pojo.enums.MetricDefineType;
 import com.tencent.supersonic.headless.api.pojo.MetricDefineByFieldParams;
 import com.tencent.supersonic.headless.api.pojo.MetricDefineByMeasureParams;
@@ -56,14 +56,15 @@ public class MetricCheckUtils {
         if (StringUtils.isBlank(expr)) {
             throw new InvalidArgumentException("表达式不可为空");
         }
-        if (NameCheckUtils.containsSpecialCharacters(metricReq.getName())) {
-            throw new InvalidArgumentException("名称包含特殊字符, 请修改");
+        String forbiddenCharacters = NameCheckUtils.findForbiddenCharacters(metricReq.getName());
+        if (StringUtils.isNotBlank(forbiddenCharacters)) {
+            throw new InvalidArgumentException(String.format("名称包含特殊字符%s, 请修改", forbiddenCharacters));
         }
     }
 
     private static boolean hasAggregateFunction(String expr) {
         String sql = String.format("select %s from table", expr);
-        return SqlParserSelectFunctionHelper.hasAggregateFunction(sql);
+        return SqlSelectFunctionHelper.hasAggregateFunction(sql);
     }
 
 }

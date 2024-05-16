@@ -8,12 +8,12 @@ import type { StateType } from './model';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { ISemantic } from './data';
 import { getDomainList, getModelList } from './service';
-import ChatSettingTab from './ChatSetting/ChatSettingTab';
+// import ChatSettingTab from './ChatSetting/ChatSettingTab';
 import DomainManagerTab from './components/DomainManagerTab';
 import type { Dispatch } from 'umi';
 
 type Props = {
-  mode: 'domain' | 'chatSetting';
+  mode: 'domain';
   domainManger: StateType;
   dispatch: Dispatch;
 };
@@ -34,7 +34,6 @@ const OverviewContainer: React.FC<Props> = ({ mode, domainManger, dispatch }) =>
     const targetNode = domainList.filter((item: any) => {
       return `${item.id}` === domainId;
     })[0];
-
     if (!targetNode) {
       const firstRootNode = domainList.filter((item: any) => {
         return item.parentId === 0;
@@ -160,12 +159,11 @@ const OverviewContainer: React.FC<Props> = ({ mode, domainManger, dispatch }) =>
   }, [selectModelId]);
 
   const pushUrlMenu = (domainId: number, modelId: number, menuKey: string) => {
-    const path = mode === 'domain' ? 'model' : 'chatSetting/model';
-    history.push(`/${path}/${domainId}/${modelId || 0}/${menuKey}`);
+    history.push(`/model/${domainId}/${modelId || 0}/${menuKey}`);
   };
 
   const handleModelChange = (model?: ISemantic.IModelItem) => {
-    queryModelList();
+    // queryModelList();
     if (!model) {
       return;
     }
@@ -181,10 +179,10 @@ const OverviewContainer: React.FC<Props> = ({ mode, domainManger, dispatch }) =>
     });
   };
 
-  const cleanModelInfo = (domainId: number) => {
+  const cleanModelInfo = (domainId) => {
     setIsModel(false);
-    pushUrlMenu(domainId, 0, 'overview');
     setActiveKey('overview');
+    pushUrlMenu(domainId, 0, 'overview');
     dispatch({
       type: 'domainManger/setSelectModel',
       selectModelId: 0,
@@ -204,7 +202,7 @@ const OverviewContainer: React.FC<Props> = ({ mode, domainManger, dispatch }) =>
           <div className={styles.treeContainer}>
             <DomainListTree
               createDomainBtnVisible={mode === 'domain' ? true : false}
-              onTreeSelected={(domainData) => {
+              onTreeSelected={(domainData: ISemantic.IDomainItem) => {
                 const { id, name } = domainData;
                 cleanModelInfo(id);
                 dispatch({
@@ -212,6 +210,12 @@ const OverviewContainer: React.FC<Props> = ({ mode, domainManger, dispatch }) =>
                   selectDomainId: id,
                   selectDomainName: name,
                   domainData,
+                });
+                dispatch({
+                  type: 'domainManger/setModelTableHistoryParams',
+                  payload: {
+                    [id]: {},
+                  },
                 });
               }}
               onTreeDataUpdate={() => {
@@ -233,39 +237,21 @@ const OverviewContainer: React.FC<Props> = ({ mode, domainManger, dispatch }) =>
         <div className={styles.content}>
           {selectDomainId ? (
             <>
-              {mode === 'domain' ? (
-                <DomainManagerTab
-                  isModel={isModel}
-                  activeKey={activeKey}
-                  modelList={modelList}
-                  handleModelChange={(model) => {
-                    handleModelChange(model);
-                  }}
-                  onBackDomainBtnClick={() => {
-                    cleanModelInfo(selectDomainId);
-                  }}
-                  onMenuChange={(menuKey) => {
-                    setActiveKey(menuKey);
-                    pushUrlMenu(selectDomainId, selectModelId, menuKey);
-                  }}
-                />
-              ) : (
-                <ChatSettingTab
-                  isModel={isModel}
-                  activeKey={activeKey}
-                  modelList={modelList}
-                  handleModelChange={(model) => {
-                    handleModelChange(model);
-                  }}
-                  onBackDomainBtnClick={() => {
-                    cleanModelInfo(selectDomainId);
-                  }}
-                  onMenuChange={(menuKey) => {
-                    setActiveKey(menuKey);
-                    pushUrlMenu(selectDomainId, selectModelId, menuKey);
-                  }}
-                />
-              )}
+              <DomainManagerTab
+                isModel={isModel}
+                activeKey={activeKey}
+                modelList={modelList}
+                handleModelChange={(model) => {
+                  handleModelChange(model);
+                }}
+                onBackDomainBtnClick={() => {
+                  cleanModelInfo(selectDomainId);
+                }}
+                onMenuChange={(menuKey) => {
+                  setActiveKey(menuKey);
+                  pushUrlMenu(selectDomainId, selectModelId, menuKey);
+                }}
+              />
             </>
           ) : (
             <h2 className={styles.mainTip}>请选择项目</h2>

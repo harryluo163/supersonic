@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button, Tag, Space } from 'antd';
-import ProTable from '@ant-design/pro-table';
-import ProCard from '@ant-design/pro-card';
+import { ProTable } from '@ant-design/pro-components';
+import { ProCard } from  '@ant-design/pro-components';
 import SqlEditor from '@/components/SqlEditor';
 import styles from './style.less';
 import FormLabelRequire from './FormLabelRequire';
@@ -9,23 +9,23 @@ import { ISemantic } from '../data';
 
 type Props = {
   typeParams: ISemantic.IFieldTypeParams;
-  fieldList: string[];
+  fieldList: ISemantic.IFieldTypeParamsItem[];
   onFieldChange: (fields: ISemantic.IFieldTypeParamsItem[]) => void;
   onSqlChange: (sql: string) => void;
 };
 
-const MetricMeasuresFormTable: React.FC<Props> = ({
+const MetricFieldFormTable: React.FC<Props> = ({
   typeParams,
   fieldList,
   onFieldChange,
   onSqlChange,
 }) => {
-  const [tableData, setTableData] = useState<any[]>([]);
+  const [tableData, setTableData] = useState<ISemantic.IFieldTypeParamsItem[]>([]);
 
   const [defineTypeParams, setDefineTypeParams] = useState(
     typeParams || {
       expr: '',
-      metrics: [],
+      fields: [],
     },
   );
 
@@ -44,9 +44,19 @@ const MetricMeasuresFormTable: React.FC<Props> = ({
   const [exprString, setExprString] = useState(typeParams?.expr || '');
 
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
-    return defineTypeParams.fields.map((item: any) => {
+    return defineTypeParams.fields.map((item: ISemantic.IFieldTypeParamsItem) => {
       return item.fieldName;
     });
+  });
+
+  const [selectedKeysMap, setSelectedKeysMap] = useState<Record<string, boolean>>(() => {
+    return defineTypeParams.fields.reduce(
+      (keyMap: Record<string, boolean>, item: ISemantic.IFieldTypeParamsItem) => {
+        keyMap[item.fieldName] = true;
+        return keyMap;
+      },
+      {},
+    );
   });
 
   const columns = [
@@ -60,15 +70,40 @@ const MetricMeasuresFormTable: React.FC<Props> = ({
     },
   ];
 
+  const handleUpdateKeys = (updateKeys: Record<string, boolean>) => {
+    setSelectedKeysMap(updateKeys);
+    const selectedKeys: string[] = [];
+    const fieldList = Object.entries(updateKeys).reduce((list: any[], item) => {
+      const [fieldName, selected] = item;
+      if (selected) {
+        selectedKeys.push(fieldName);
+        list.push({ fieldName });
+      }
+      return list;
+    }, []);
+    setSelectedKeys(selectedKeys);
+    onFieldChange(fieldList);
+  };
+
   const rowSelection = {
     selectedRowKeys: selectedKeys,
-    onChange: (_selectedRowKeys: any[]) => {
-      setSelectedKeys([..._selectedRowKeys]);
-      onFieldChange(
-        _selectedRowKeys.map((fieldName) => {
-          return { fieldName };
-        }),
+    onSelect: (record: ISemantic.IFieldTypeParamsItem, selected: boolean) => {
+      const updateKeys = { ...selectedKeysMap, [record.fieldName]: selected };
+      handleUpdateKeys(updateKeys);
+    },
+    onSelectAll: (
+      selected: boolean,
+      selectedRows: ISemantic.IFieldTypeParamsItem[],
+      changeRows: ISemantic.IFieldTypeParamsItem[],
+    ) => {
+      const updateKeys = changeRows.reduce(
+        (keyMap: Record<string, boolean>, item: ISemantic.IFieldTypeParamsItem) => {
+          keyMap[item.fieldName] = selected;
+          return keyMap;
+        },
+        {},
       );
+      handleUpdateKeys({ ...selectedKeysMap, ...updateKeys });
     },
   };
 
@@ -80,16 +115,20 @@ const MetricMeasuresFormTable: React.FC<Props> = ({
           rowKey="fieldName"
           columns={columns}
           dataSource={tableData}
-          pagination={false}
           search={false}
           toolbar={{
             search: {
               placeholder: '请输入字段名称',
               onSearch: (value: string) => {
+                if (!value) {
+                  setTableData(fieldList);
+                  return;
+                }
+
                 setTableData(
-                  fieldList.reduce((data: ISemantic.IFieldTypeParamsItem[], fieldName) => {
-                    if (fieldName.includes(value)) {
-                      data.push({ fieldName });
+                  fieldList.reduce((data: ISemantic.IFieldTypeParamsItem[], item) => {
+                    if (item.fieldName.includes(value)) {
+                      data.push(item);
                     }
                     return data;
                   }, []),
@@ -97,6 +136,7 @@ const MetricMeasuresFormTable: React.FC<Props> = ({
               },
             },
           }}
+          pagination={{ defaultPageSize: 10 }}
           size="small"
           options={false}
           tableAlertRender={false}
@@ -104,7 +144,7 @@ const MetricMeasuresFormTable: React.FC<Props> = ({
           rowSelection={rowSelection}
         />
         <ProCard
-          title={<FormLabelRequire title="字段表达式" />}
+          title={<FormLabelRequire title="表达式" />}
           // tooltip="度量表达式由上面选择的度量组成，如选择了度量A和B，则可将表达式写成A+B"
         >
           <div>
@@ -134,4 +174,4 @@ const MetricMeasuresFormTable: React.FC<Props> = ({
   );
 };
 
-export default MetricMeasuresFormTable;
+export default MetricFieldFormTable;

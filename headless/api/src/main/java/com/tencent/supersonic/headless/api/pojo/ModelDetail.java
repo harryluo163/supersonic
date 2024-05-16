@@ -2,15 +2,18 @@ package com.tencent.supersonic.headless.api.pojo;
 
 import com.google.common.collect.Lists;
 import com.tencent.supersonic.headless.api.pojo.enums.DimensionType;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.util.CollectionUtils;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-
 @Data
+@AllArgsConstructor
+@NoArgsConstructor
 public class ModelDetail {
 
     private String queryType;
@@ -19,13 +22,15 @@ public class ModelDetail {
 
     private String tableQuery;
 
-    private List<Identify> identifiers;
+    private List<Identify> identifiers = Lists.newArrayList();
 
-    private List<Dim> dimensions;
+    private List<Dim> dimensions = Lists.newArrayList();
 
-    private List<Measure> measures;
+    private List<Measure> measures = Lists.newArrayList();
 
-    private List<Field> fields;
+    private List<Field> fields = Lists.newArrayList();
+
+    private List<SqlVariable> sqlVariables = Lists.newArrayList();
 
     public String getSqlQuery() {
         if (StringUtils.isNotBlank(sqlQuery) && sqlQuery.endsWith(";")) {

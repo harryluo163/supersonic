@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { message, Row, Col, Button, Space, Select, Form, Tooltip } from 'antd';
 import { queryStruct } from '@/pages/SemanticModel/service';
-import { DownloadOutlined, PoweroffOutlined, ArrowLeftOutlined } from '@ant-design/icons';
+import { DownloadOutlined, PoweroffOutlined, SearchOutlined } from '@ant-design/icons';
 import TrendChart from '@/pages/SemanticModel/Metric/components/MetricTrend';
 import MetricTrendDimensionFilterContainer from './MetricTrendDimensionFilterContainer';
 import MDatePicker from '@/components/MDatePicker';
@@ -11,10 +11,9 @@ import StandardFormRow from '@/components/StandardFormRow';
 import MetricTable from './Table';
 import { ColumnConfig } from '../data';
 import dayjs from 'dayjs';
-import { history } from 'umi';
 import { ISemantic } from '../../data';
 import { DateFieldMap } from '@/pages/SemanticModel/constant';
-import ProCard from '@ant-design/pro-card';
+import { ProCard } from  '@ant-design/pro-components';
 
 import styles from '../style.less';
 
@@ -44,10 +43,12 @@ const MetricTrendSection: React.FC<Props> = ({
     startDate: string;
     endDate: string;
     dateField: string;
+    period: DateRangeType;
   }>({
     startDate: dayjs().subtract(6, 'days').format('YYYY-MM-DD'),
     endDate: dayjs().format('YYYY-MM-DD'),
     dateField: DateFieldMap[DateRangeType.DAY],
+    period: DateRangeType.DAY,
   });
   const [rowNumber, setRowNumber] = useState<number>(5);
 
@@ -67,31 +68,24 @@ const MetricTrendSection: React.FC<Props> = ({
     if (!metircData) {
       return;
     }
-    const { modelId, bizName, name } = metircData;
+    const { bizName, id, domainId, name } = metircData;
     indicatorFields.current = [{ name, column: bizName }];
 
-    const dimensionFiltersBizNameList = dimensionFilters.map((item) => {
-      return item.bizName;
-    });
-
-    const bizNameList = Array.from(new Set([...dimensionFiltersBizNameList, ...dimensionGroup]));
-
-    const modelIds = dimensionList.reduce(
+    const dimensionIds = dimensionList.reduce(
       (idList: number[], item: ISemantic.IDimensionItem) => {
-        if (bizNameList.includes(item.bizName)) {
-          idList.push(item.modelId);
+        if (dimensionGroup.includes(item.bizName)) {
+          idList.push(item.id);
         }
         return idList;
       },
-      [modelId],
+      [],
     );
-
     const res = await queryStruct({
-      // modelId,
-      modelIds: Array.from(new Set(modelIds)),
-      bizName,
-      groups: dimensionGroup,
-      dimensionFilters,
+      domainId,
+      metricIds: [id],
+      dimensionIds,
+      filters: dimensionFilters,
+      period: periodDate.period,
       dateField: periodDate.dateField,
       startDate: periodDate.startDate,
       endDate: periodDate.endDate,
@@ -119,6 +113,9 @@ const MetricTrendSection: React.FC<Props> = ({
         setMetricColumnConfig(targetConfig);
       }
       setDownloadBtnDisabledState(false);
+      if (dimensionGroup[dimensionGroup.length - 1]) {
+        setGroupByDimensionFieldName(dimensionGroup[dimensionGroup.length - 1]);
+      }
     } else {
       if (code === 401 || code === 400) {
         setAuthMessage(msg);
@@ -135,7 +132,7 @@ const MetricTrendSection: React.FC<Props> = ({
     if (metircData?.id) {
       getMetricTrendData({ ...queryParams });
     }
-  }, [metircData, periodDate]);
+  }, [metircData]);
 
   return (
     <div className={styles.metricTrendSection}>
@@ -160,13 +157,16 @@ const MetricTrendSection: React.FC<Props> = ({
                       const [startDate, endDate] = value;
                       const { dateSettingType, dynamicParams, staticParams } = config;
                       let dateField = DateFieldMap[DateRangeType.DAY];
+                      let period = DateRangeType.DAY;
                       if (DateSettingType.DYNAMIC === dateSettingType) {
                         dateField = DateFieldMap[dynamicParams.dateRangeType];
+                        period = dynamicParams.dateRangeType;
                       }
                       if (DateSettingType.STATIC === dateSettingType) {
                         dateField = DateFieldMap[staticParams.dateRangeType];
+                        period = staticParams.dateRangeType;
                       }
-                      setPeriodDate({ startDate, endDate, dateField });
+                      setPeriodDate({ startDate, endDate, dateField, period });
                     }}
                     disabledAdvanceSetting={true}
                   />
@@ -186,8 +186,6 @@ const MetricTrendSection: React.FC<Props> = ({
                     onChange={(value) => {
                       const params = { ...queryParams, dimensionGroup: value || [] };
                       setQueryParams(params);
-                      getMetricTrendData({ ...params });
-                      setGroupByDimensionFieldName(value[value.length - 1]);
                     }}
                   />
                 </FormItem>
@@ -212,8 +210,20 @@ const MetricTrendSection: React.FC<Props> = ({
                         dimensionFilters,
                       };
                       setQueryParams(params);
-                      getMetricTrendData({ ...params });
                     }}
+                    afterSolt={
+                      <Button
+                        type="primary"
+                        icon={<SearchOutlined />}
+                        size="middle"
+                        loading={metricTrendLoading}
+                        onClick={() => {
+                          getMetricTrendData({ ...queryParams });
+                        }}
+                      >
+                        查 询
+                      </Button>
+                    }
                   />
                 </FormItem>
               </StandardFormRow>
@@ -221,31 +231,21 @@ const MetricTrendSection: React.FC<Props> = ({
           </Col>
           <Col flex="0 1" />
         </Row>
-        <Button
-          style={{
-            position: 'absolute',
-            top: 20,
-            right: 20,
-          }}
-          size="middle"
-          type="link"
-          key="backListBtn"
-          onClick={() => {
-            history.push('/metric/market');
-          }}
-        >
-          <Space>
-            <ArrowLeftOutlined />
-            返回列表页
-          </Space>
-        </Button>
-        {/* <div className={styles.btnWrapper}>
+        {/* <Row style={{ paddingLeft: 82, paddingBottom: 8 }}>
 
-        </div> */}
+        </Row> */}
       </div>
-      {authMessage && <div style={{ color: '#d46b08', marginBottom: 15 }}>{authMessage}</div>}
+
       <div className={styles.sectionBox}>
-        <ProCard size="small" title="数据趋势">
+        <ProCard
+          size="small"
+          title={
+            <>
+              <span>数据趋势</span>
+              {authMessage && <div style={{ color: '#d46b08' }}>{authMessage}</div>}
+            </>
+          }
+        >
           <TrendChart
             data={metricTrendData}
             isPer={
@@ -272,7 +272,7 @@ const MetricTrendSection: React.FC<Props> = ({
         </ProCard>
       </div>
 
-      <div className={styles.sectionBox}>
+      <div className={styles.sectionBox} style={{ paddingBottom: 0 }}>
         <ProCard
           size="small"
           title="数据明细"
@@ -307,7 +307,7 @@ const MetricTrendSection: React.FC<Props> = ({
             </Space.Compact>
           }
         >
-          <div style={{ minHeight: '528px' }}>
+          <div style={{ minHeight: '450px' }}>
             <MetricTable
               loading={metricTrendLoading}
               columnConfig={tableColumnConfig}

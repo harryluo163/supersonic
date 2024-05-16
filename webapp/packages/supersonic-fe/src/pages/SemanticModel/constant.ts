@@ -37,14 +37,16 @@ export const IS_TAG_ENUM = {
 };
 
 export const SENSITIVE_LEVEL_COLOR = {
-  [SENSITIVE_LEVEL.LOW]: 'geekblue',
-  [SENSITIVE_LEVEL.MID]: 'warning',
-  [SENSITIVE_LEVEL.HIGH]: 'error',
+  [SENSITIVE_LEVEL.LOW]: 'default',
+  [SENSITIVE_LEVEL.MID]: 'orange',
+  // [SENSITIVE_LEVEL.MID]: 'geekblue',
+  [SENSITIVE_LEVEL.HIGH]: 'volcano',
+  // [SENSITIVE_LEVEL.HIGH]: '#1677ff',
 };
 
 export const SEMANTIC_NODE_TYPE_CONFIG = {
   [SemanticNodeType.DATASOURCE]: {
-    label: '数据源',
+    label: '模型',
     value: SemanticNodeType.DATASOURCE,
     color: 'cyan',
   },
@@ -77,3 +79,15 @@ export enum METRIC_DEFINE_TYPE {
   MEASURE = 'MEASURE',
   METRIC = 'METRIC',
 }
+
+export enum TAG_DEFINE_TYPE {
+  FIELD = 'FIELD',
+  DIMENSION = 'DIMENSION',
+  METRIC = 'METRIC',
+}
+
+export const TagDefineTypeMap = {
+  [TAG_DEFINE_TYPE.FIELD]: '字段',
+  [TAG_DEFINE_TYPE.DIMENSION]: '维度',
+  [TAG_DEFINE_TYPE.METRIC]: '指标',
+};

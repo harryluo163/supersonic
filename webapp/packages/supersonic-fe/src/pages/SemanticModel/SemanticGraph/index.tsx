@@ -30,7 +30,7 @@ import NodeInfoDrawer from './components/NodeInfoDrawer';
 import DimensionInfoModal from '../components/DimensionInfoModal';
 import MetricInfoCreateForm from '../components/MetricInfoCreateForm';
 import DeleteConfirmModal from './components/DeleteConfirmModal';
-import ClassDataSourceTypeModal from '../components/ClassDataSourceTypeModal';
+import ClassModelTypeModal from '../components/ClassModelTypeModal';
 import GraphToolBar from './components/GraphToolBar';
 import GraphLegend from './components/GraphLegend';
 import GraphLegendVisibleModeItem from './components/GraphLegendVisibleModeItem';
@@ -103,12 +103,14 @@ const DomainManger: React.FC<Props> = ({ domainManger, dispatch }) => {
     const filterData = dataSourceRef.current.reduce(
       (data: ISemantic.IDomainSchemaRelaList, item: ISemantic.IDomainSchemaRelaItem) => {
         const { dimensions, metrics } = item;
-        const dimensionsList = dimensions.filter((dimension) => {
-          return dimension.name.includes(text);
-        });
-        const metricsList = metrics.filter((metric) => {
-          return metric.name.includes(text);
-        });
+        const dimensionsList =
+          dimensions?.filter((dimension) => {
+            return dimension.name.includes(text);
+          }) || [];
+        const metricsList =
+          metrics?.filter((metric) => {
+            return metric.name.includes(text);
+          }) || [];
         data.push({
           ...item,
           dimensions: dimensionsList,
@@ -1113,7 +1115,7 @@ const DomainManger: React.FC<Props> = ({ domainManger, dispatch }) => {
       )}
 
       {createDataSourceModalOpen && (
-        <ClassDataSourceTypeModal
+        <ClassModelTypeModal
           open={createDataSourceModalOpen}
           onCancel={() => {
             setNodeDataSource(undefined);

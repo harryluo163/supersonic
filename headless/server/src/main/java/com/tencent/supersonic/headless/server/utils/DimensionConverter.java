@@ -10,15 +10,18 @@ import com.tencent.supersonic.headless.api.pojo.DimValueMap;
 import com.tencent.supersonic.headless.api.pojo.request.DimensionReq;
 import com.tencent.supersonic.headless.api.pojo.response.DimensionResp;
 import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
+import com.tencent.supersonic.headless.api.pojo.response.DataSetResp;
 import com.tencent.supersonic.headless.server.persistence.dataobject.DimensionDO;
 import org.apache.logging.log4j.util.Strings;
 import org.springframework.beans.BeanUtils;
 import org.springframework.util.CollectionUtils;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class DimensionConverter {
 
@@ -35,6 +38,9 @@ public class DimensionConverter {
         if (Objects.nonNull(dimensionReq.getDataType())) {
             dimensionDO.setDataType(dimensionReq.getDataType().getType());
         }
+        if (dimensionReq.getExt() != null) {
+            dimensionDO.setExt(JSONObject.toJSONString(dimensionReq.getExt()));
+        }
         return dimensionDO;
     }
 
@@ -49,6 +55,9 @@ public class DimensionConverter {
         }
         if (Objects.nonNull(dimensionReq.getDataType())) {
             dimensionDO.setDataType(dimensionReq.getDataType().getType());
+        }
+        if (dimensionReq.getExt() != null) {
+            dimensionDO.setExt(JSONObject.toJSONString(dimensionReq.getExt()));
         }
         dimensionDO.setStatus(StatusEnum.ONLINE.getCode());
         return dimensionDO;
@@ -73,8 +82,22 @@ public class DimensionConverter {
         if (Strings.isNotEmpty(dimensionDO.getDataType())) {
             dimensionResp.setDataType(DataTypeEnums.of(dimensionDO.getDataType()));
         }
+        if (dimensionDO.getExt() != null) {
+            dimensionResp.setExt(JSONObject.parseObject(dimensionDO.getExt(), Map.class));
+        }
         dimensionResp.setTypeEnum(TypeEnums.DIMENSION);
         return dimensionResp;
+    }
+
+    public static DimensionResp convert2DimensionResp(DimensionDO dimensionDO) {
+        return convert2DimensionResp(dimensionDO, new HashMap<>());
+    }
+
+    public static List<DimensionResp> filterByDataSet(List<DimensionResp> dimensionResps, DataSetResp dataSetResp) {
+        return dimensionResps.stream().filter(dimensionResp ->
+                dataSetResp.dimensionIds().contains(dimensionResp.getId())
+                        || dataSetResp.getAllIncludeAllModels().contains(dimensionResp.getModelId()))
+                .collect(Collectors.toList());
     }
 
 }

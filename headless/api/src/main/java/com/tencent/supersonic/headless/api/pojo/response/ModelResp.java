@@ -3,33 +3,38 @@ package com.tencent.supersonic.headless.api.pojo.response;
 import com.google.common.collect.Lists;
 import com.tencent.supersonic.headless.api.pojo.Dim;
 import com.tencent.supersonic.headless.api.pojo.DrillDownDimension;
+import com.tencent.supersonic.headless.api.pojo.Field;
 import com.tencent.supersonic.headless.api.pojo.Identify;
-import com.tencent.supersonic.headless.api.pojo.Measure;
 import com.tencent.supersonic.headless.api.pojo.ModelDetail;
 import com.tencent.supersonic.headless.api.pojo.SchemaItem;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.ToString;
 import org.springframework.util.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Data
 @ToString(callSuper = true)
+@AllArgsConstructor
+@NoArgsConstructor
 public class ModelResp extends SchemaItem {
 
     private Long domainId;
 
     private Long databaseId;
 
+    private Long tagObjectId;
+
     private ModelDetail modelDetail;
 
     private String depends;
-
-    private String sourceType;
 
     private String filterSql;
 
@@ -43,7 +48,7 @@ public class ModelResp extends SchemaItem {
 
     private Integer isOpen;
 
-    private List<DrillDownDimension> drillDownDimensions;
+    private List<DrillDownDimension> drillDownDimensions = Lists.newArrayList();
 
     private String alias;
 
@@ -80,19 +85,26 @@ public class ModelResp extends SchemaItem {
         if (modelDetail == null) {
             return fieldSet;
         }
-        if (!CollectionUtils.isEmpty(modelDetail.getIdentifiers())) {
-            fieldSet.addAll(modelDetail.getIdentifiers().stream()
-                    .map(Identify::getFieldName).collect(Collectors.toSet()));
-        }
-        if (!CollectionUtils.isEmpty(modelDetail.getDimensions())) {
-            fieldSet.addAll(modelDetail.getDimensions().stream()
-                    .map(Dim::getFieldName).collect(Collectors.toSet()));
-        }
-        if (!CollectionUtils.isEmpty(modelDetail.getMeasures())) {
-            fieldSet.addAll(modelDetail.getMeasures().stream()
-                    .map(Measure::getFieldName).collect(Collectors.toSet()));
+        if (!CollectionUtils.isEmpty(modelDetail.getFields())) {
+            fieldSet.addAll(modelDetail.getFields().stream()
+                    .map(Field::getFieldName).collect(Collectors.toSet()));
         }
         return fieldSet;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        return super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), domainId);
+    }
 }

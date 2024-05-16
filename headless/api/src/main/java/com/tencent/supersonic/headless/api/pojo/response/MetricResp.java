@@ -30,6 +30,8 @@ public class MetricResp extends SchemaItem {
 
     private Long domainId;
 
+    private String modelBizName;
+
     private String modelName;
 
     //ATOMIC DERIVED
@@ -41,7 +43,7 @@ public class MetricResp extends SchemaItem {
 
     private String alias;
 
-    private List<String> tags;
+    private List<String> classifications;
 
     private RelateDimension relateDimension;
 
@@ -59,11 +61,19 @@ public class MetricResp extends SchemaItem {
 
     private MetricDefineByMetricParams metricDefineByMetricParams;
 
-    public void setTag(String tag) {
+    private int isTag;
+
+    private Integer isPublish;
+
+    private double similarity;
+
+    private String defaultAgg;
+
+    public void setClassifications(String tag) {
         if (StringUtils.isBlank(tag)) {
-            tags = Lists.newArrayList();
+            classifications = Lists.newArrayList();
         } else {
-            tags = Arrays.asList(tag.split(","));
+            classifications = Arrays.asList(tag.split(","));
         }
     }
 
@@ -77,12 +87,11 @@ public class MetricResp extends SchemaItem {
                 .collect(Collectors.joining(","));
     }
 
-    public String getDefaultAgg() {
-        if (metricDefineByMeasureParams != null
-                && CollectionUtils.isNotEmpty(metricDefineByMeasureParams.getMeasures())) {
-            return metricDefineByMeasureParams.getMeasures().get(0).getAgg();
+    public List<DrillDownDimension> getDrillDownDimensions() {
+        if (relateDimension == null || CollectionUtils.isEmpty(relateDimension.getDrillDownDimensions())) {
+            return Lists.newArrayList();
         }
-        return "";
+        return relateDimension.getDrillDownDimensions();
     }
 
     public String getExpr() {

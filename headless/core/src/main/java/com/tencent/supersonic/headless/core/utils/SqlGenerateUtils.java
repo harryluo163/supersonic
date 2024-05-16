@@ -15,15 +15,17 @@ import com.tencent.supersonic.common.pojo.enums.TimeDimensionEnum;
 import com.tencent.supersonic.common.util.DateModeUtils;
 import com.tencent.supersonic.common.util.SqlFilterUtils;
 import com.tencent.supersonic.common.util.StringUtil;
-import com.tencent.supersonic.common.util.jsqlparser.SqlParserReplaceHelper;
-import com.tencent.supersonic.common.util.jsqlparser.SqlParserSelectHelper;
+import com.tencent.supersonic.common.util.jsqlparser.SqlReplaceHelper;
+import com.tencent.supersonic.common.util.jsqlparser.SqlSelectHelper;
 import com.tencent.supersonic.headless.api.pojo.Measure;
+import com.tencent.supersonic.headless.api.pojo.QueryParam;
 import com.tencent.supersonic.headless.api.pojo.enums.AggOption;
 import com.tencent.supersonic.headless.api.pojo.enums.EngineType;
 import com.tencent.supersonic.headless.api.pojo.enums.MetricDefineType;
 import com.tencent.supersonic.headless.api.pojo.request.QueryStructReq;
-import com.tencent.supersonic.headless.api.pojo.response.DimensionResp;
+import com.tencent.supersonic.headless.api.pojo.response.DimSchemaResp;
 import com.tencent.supersonic.headless.api.pojo.response.MetricResp;
+import com.tencent.supersonic.headless.api.pojo.response.MetricSchemaResp;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
@@ -92,25 +94,25 @@ public class SqlGenerateUtils {
         return selectSql;
     }
 
-    public String getLimit(QueryStructReq queryStructCmd) {
-        if (queryStructCmd.getLimit() > 0) {
-            return " limit " + queryStructCmd.getLimit();
+    public String getLimit(QueryParam queryParam) {
+        if (queryParam.getLimit() > 0) {
+            return " limit " + queryParam.getLimit();
         }
         return "";
     }
 
-    public String getSelect(QueryStructReq queryStructCmd) {
-        String aggStr = queryStructCmd.getAggregators().stream().map(this::getSelectField)
+    public String getSelect(QueryParam queryParam) {
+        String aggStr = queryParam.getAggregators().stream().map(this::getSelectField)
                 .collect(Collectors.joining(","));
-        return CollectionUtils.isEmpty(queryStructCmd.getGroups()) ? aggStr
-                : String.join(",", queryStructCmd.getGroups()) + "," + aggStr;
+        return CollectionUtils.isEmpty(queryParam.getGroups()) ? aggStr
+                : String.join(",", queryParam.getGroups()) + "," + aggStr;
     }
 
-    public String getSelect(QueryStructReq queryStructCmd, Map<String, String> deriveMetrics) {
-        String aggStr = queryStructCmd.getAggregators().stream().map(a -> getSelectField(a, deriveMetrics))
+    public String getSelect(QueryParam queryParam, Map<String, String> deriveMetrics) {
+        String aggStr = queryParam.getAggregators().stream().map(a -> getSelectField(a, deriveMetrics))
                 .collect(Collectors.joining(","));
-        return CollectionUtils.isEmpty(queryStructCmd.getGroups()) ? aggStr
-                : String.join(",", queryStructCmd.getGroups()) + "," + aggStr;
+        return CollectionUtils.isEmpty(queryParam.getGroups()) ? aggStr
+                : String.join(",", queryParam.getGroups()) + "," + aggStr;
     }
 
     public String getSelectField(final Aggregator agg) {
@@ -132,42 +134,42 @@ public class SqlGenerateUtils {
         return deriveMetrics.get(agg.getColumn());
     }
 
-    public String getGroupBy(QueryStructReq queryStructCmd) {
-        if (CollectionUtils.isEmpty(queryStructCmd.getGroups())) {
+    public String getGroupBy(QueryParam queryParam) {
+        if (CollectionUtils.isEmpty(queryParam.getGroups())) {
             return "";
         }
-        return "group by " + String.join(",", queryStructCmd.getGroups());
+        return "group by " + String.join(",", queryParam.getGroups());
     }
 
-    public String getOrderBy(QueryStructReq queryStructCmd) {
-        if (CollectionUtils.isEmpty(queryStructCmd.getOrders())) {
+    public String getOrderBy(QueryParam queryParam) {
+        if (CollectionUtils.isEmpty(queryParam.getOrders())) {
             return "";
         }
-        return "order by " + queryStructCmd.getOrders().stream()
+        return "order by " + queryParam.getOrders().stream()
                 .map(order -> " " + order.getColumn() + " " + order.getDirection() + " ")
                 .collect(Collectors.joining(","));
     }
 
-    public String getOrderBy(QueryStructReq queryStructCmd, Map<String, String> deriveMetrics) {
-        if (CollectionUtils.isEmpty(queryStructCmd.getOrders())) {
+    public String getOrderBy(QueryParam queryParam, Map<String, String> deriveMetrics) {
+        if (CollectionUtils.isEmpty(queryParam.getOrders())) {
             return "";
         }
-        if (!queryStructCmd.getOrders().stream().anyMatch(o -> deriveMetrics.containsKey(o.getColumn()))) {
-            return getOrderBy(queryStructCmd);
+        if (!queryParam.getOrders().stream().anyMatch(o -> deriveMetrics.containsKey(o.getColumn()))) {
+            return getOrderBy(queryParam);
         }
-        return "order by " + queryStructCmd.getOrders().stream()
+        return "order by " + queryParam.getOrders().stream()
                 .map(order -> " " + (deriveMetrics.containsKey(order.getColumn()) ? deriveMetrics.get(order.getColumn())
                         : order.getColumn()) + " " + order.getDirection() + " ")
                 .collect(Collectors.joining(","));
     }
 
-    public String generateWhere(QueryStructReq queryStructReq, ItemDateResp itemDateResp) {
-        String whereClauseFromFilter = sqlFilterUtils.getWhereClause(queryStructReq.getOriginalFilter());
-        String whereFromDate = getDateWhereClause(queryStructReq.getDateInfo(), itemDateResp);
-        return mergeDateWhereClause(queryStructReq, whereClauseFromFilter, whereFromDate);
+    public String generateWhere(QueryParam queryParam, ItemDateResp itemDateResp) {
+        String whereClauseFromFilter = sqlFilterUtils.getWhereClause(queryParam.getDimensionFilters());
+        String whereFromDate = getDateWhereClause(queryParam.getDateInfo(), itemDateResp);
+        return mergeDateWhereClause(queryParam, whereClauseFromFilter, whereFromDate);
     }
 
-    private String mergeDateWhereClause(QueryStructReq queryStructCmd, String whereClauseFromFilter,
+    private String mergeDateWhereClause(QueryParam queryParam, String whereClauseFromFilter,
             String whereFromDate) {
         if (Strings.isNotEmpty(whereFromDate) && Strings.isNotEmpty(whereClauseFromFilter)) {
             return String.format("%s AND (%s)", whereFromDate, whereClauseFromFilter);
@@ -177,12 +179,12 @@ public class SqlGenerateUtils {
             return whereFromDate;
         } else if (Objects.isNull(whereFromDate) && Strings.isEmpty(whereClauseFromFilter)) {
             log.info("the current date information is empty, enter the date initialization logic");
-            return dateModeUtils.defaultRecentDateInfo(queryStructCmd.getDateInfo());
+            return dateModeUtils.defaultRecentDateInfo(queryParam.getDateInfo());
         }
         return whereClauseFromFilter;
     }
 
-    private String getDateWhereClause(DateConf dateInfo, ItemDateResp dateDate) {
+    public String getDateWhereClause(DateConf dateInfo, ItemDateResp dateDate) {
         if (Objects.isNull(dateDate)
                 || Strings.isEmpty(dateDate.getStartDate())
                 && Strings.isEmpty(dateDate.getEndDate())) {
@@ -202,11 +204,11 @@ public class SqlGenerateUtils {
         return dateModeUtils.getDateWhereStr(dateInfo, dateDate);
     }
 
-    public Triple<String, String, String> getBeginEndTime(QueryStructReq queryStructCmd, ItemDateResp dataDate) {
-        if (Objects.isNull(queryStructCmd.getDateInfo())) {
+    public Triple<String, String, String> getBeginEndTime(QueryParam queryParam, ItemDateResp dataDate) {
+        if (Objects.isNull(queryParam.getDateInfo())) {
             return Triple.of("", "", "");
         }
-        DateConf dateConf = queryStructCmd.getDateInfo();
+        DateConf dateConf = queryParam.getDateInfo();
         String dateInfo = dateModeUtils.getSysDateCol(dateConf);
         if (dateInfo.isEmpty()) {
             return Triple.of("", "", "");
@@ -269,19 +271,21 @@ public class SqlGenerateUtils {
         return modelBizName + UNDERLINE + internalMetricNameSuffix;
     }
 
-    public String generateDerivedMetric(final List<MetricResp> metricResps, final Set<String> allFields,
-            final Map<String, Measure> allMeasures, final List<DimensionResp> dimensionResps,
-            final String expression, final MetricDefineType metricDefineType, AggOption aggOption,
+    public String generateDerivedMetric(final List<MetricSchemaResp> metricResps, final Set<String> allFields,
+            final Map<String, Measure> allMeasures,
+            final List<DimSchemaResp> dimensionResps,
+            final String expression, final MetricDefineType metricDefineType,
+            AggOption aggOption,
             Set<String> visitedMetric,
             Set<String> measures,
             Set<String> dimensions) {
-        Set<String> fields = SqlParserSelectHelper.getColumnFromExpr(expression);
+        Set<String> fields = SqlSelectHelper.getColumnFromExpr(expression);
         if (!CollectionUtils.isEmpty(fields)) {
             Map<String, String> replace = new HashMap<>();
             for (String field : fields) {
                 switch (metricDefineType) {
                     case METRIC:
-                        Optional<MetricResp> metricItem = metricResps.stream()
+                        Optional<MetricSchemaResp> metricItem = metricResps.stream()
                                 .filter(m -> m.getBizName().equalsIgnoreCase(field)).findFirst();
                         if (metricItem.isPresent()) {
                             if (visitedMetric.contains(field)) {
@@ -302,7 +306,7 @@ public class SqlGenerateUtils {
                         break;
                     case FIELD:
                         if (allFields.contains(field)) {
-                            Optional<DimensionResp> dimensionItem = dimensionResps.stream()
+                            Optional<DimSchemaResp> dimensionItem = dimensionResps.stream()
                                     .filter(d -> d.getBizName().equals(field)).findFirst();
                             if (dimensionItem.isPresent()) {
                                 dimensions.add(field);
@@ -317,7 +321,7 @@ public class SqlGenerateUtils {
                 }
             }
             if (!CollectionUtils.isEmpty(replace)) {
-                String expr = SqlParserReplaceHelper.replaceExpression(expression, replace);
+                String expr = SqlReplaceHelper.replaceExpression(expression, replace);
                 log.info("derived measure {}->{}", expression, expr);
                 return expr;
             }

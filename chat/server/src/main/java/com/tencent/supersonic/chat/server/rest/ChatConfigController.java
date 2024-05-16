@@ -1,23 +1,15 @@
 package com.tencent.supersonic.chat.server.rest;
 
-import com.github.pagehelper.PageInfo;
 import com.tencent.supersonic.auth.api.authentication.pojo.User;
 import com.tencent.supersonic.auth.api.authentication.utils.UserHolder;
-import com.tencent.supersonic.chat.core.knowledge.semantic.SemanticInterpreter;
 import com.tencent.supersonic.chat.api.pojo.request.ChatConfigBaseReq;
 import com.tencent.supersonic.chat.api.pojo.request.ChatConfigEditReqReq;
 import com.tencent.supersonic.chat.api.pojo.request.ChatConfigFilter;
 import com.tencent.supersonic.chat.api.pojo.response.ChatConfigResp;
 import com.tencent.supersonic.chat.api.pojo.response.ChatConfigRichResp;
-import com.tencent.supersonic.chat.core.utils.ComponentFactory;
 import com.tencent.supersonic.chat.server.service.ConfigService;
-import com.tencent.supersonic.common.pojo.enums.AuthType;
-import com.tencent.supersonic.headless.api.pojo.request.PageDimensionReq;
-import com.tencent.supersonic.headless.api.pojo.request.PageMetricReq;
-import com.tencent.supersonic.headless.api.pojo.response.DimensionResp;
-import com.tencent.supersonic.headless.api.pojo.response.DomainResp;
-import com.tencent.supersonic.headless.api.pojo.response.MetricResp;
-import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
+import com.tencent.supersonic.headless.api.pojo.response.ItemResp;
+import com.tencent.supersonic.headless.server.service.SchemaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -39,8 +31,8 @@ public class ChatConfigController {
     @Autowired
     private ConfigService configService;
 
-
-    private SemanticInterpreter semanticInterpreter = ComponentFactory.getSemanticLayer();
+    @Autowired
+    private SchemaService schemaService;
 
     @PostMapping
     public Long addChatConfig(@RequestBody ChatConfigBaseReq extendBaseCmd,
@@ -76,48 +68,9 @@ public class ChatConfigController {
         return configService.getAllChatRichConfig();
     }
 
-    @GetMapping("/modelList/{domainId}")
-    public List<ModelResp> getModelList(@PathVariable("domainId") Long domainId,
-                                        HttpServletRequest request,
-                                        HttpServletResponse response) {
-        User user = UserHolder.findUser(request, response);
-        return semanticInterpreter.getModelList(AuthType.ADMIN, domainId, user);
-    }
-
-    @GetMapping("/modelList")
-    public List<ModelResp> getModelList(HttpServletRequest request,
-                                        HttpServletResponse response) {
-        User user = UserHolder.findUser(request, response);
-        return semanticInterpreter.getModelList(AuthType.ADMIN, null, user);
-    }
-
-    @GetMapping("/domainList")
-    public List<DomainResp> getDomainList(HttpServletRequest request,
-                                          HttpServletResponse response) {
-        User user = UserHolder.findUser(request, response);
-        return semanticInterpreter.getDomainList(user);
-    }
-
-    @GetMapping("/modelList/view")
-    public List<ModelResp> getModelListVisible(HttpServletRequest request,
-                                               HttpServletResponse response) {
-        User user = UserHolder.findUser(request, response);
-        return semanticInterpreter.getModelList(AuthType.VISIBLE, null, user);
-    }
-
-    @PostMapping("/dimension/page")
-    public PageInfo<DimensionResp> getDimension(@RequestBody PageDimensionReq pageDimensionReq,
-                                                HttpServletRequest request,
-                                                HttpServletResponse response) {
-        return semanticInterpreter.getDimensionPage(pageDimensionReq);
-    }
-
-    @PostMapping("/metric/page")
-    public PageInfo<MetricResp> getMetric(@RequestBody PageMetricReq pageMetricReq,
-                                          HttpServletRequest request,
-                                          HttpServletResponse response) {
-        User user = UserHolder.findUser(request, response);
-        return semanticInterpreter.getMetricPage(pageMetricReq, user);
+    @GetMapping("/getDomainDataSetTree")
+    public List<ItemResp> getDomainDataSetTree() {
+        return schemaService.getDomainDataSetTree();
     }
 
 }

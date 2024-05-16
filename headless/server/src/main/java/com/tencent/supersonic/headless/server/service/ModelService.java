@@ -7,19 +7,14 @@ import com.tencent.supersonic.headless.api.pojo.ItemDateFilter;
 import com.tencent.supersonic.headless.api.pojo.request.FieldRemovedReq;
 import com.tencent.supersonic.headless.api.pojo.request.MetaBatchReq;
 import com.tencent.supersonic.headless.api.pojo.request.ModelReq;
-import com.tencent.supersonic.headless.api.pojo.request.ModelSchemaFilterReq;
 import com.tencent.supersonic.headless.api.pojo.response.DatabaseResp;
 import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
-import com.tencent.supersonic.headless.api.pojo.response.ModelSchemaResp;
 import com.tencent.supersonic.headless.api.pojo.response.UnAvailableItemResp;
-import com.tencent.supersonic.headless.server.pojo.yaml.DataModelYamlTpl;
-import com.tencent.supersonic.headless.server.pojo.yaml.DimensionYamlTpl;
-import com.tencent.supersonic.headless.server.pojo.yaml.MetricYamlTpl;
+import com.tencent.supersonic.headless.server.pojo.MetaFilter;
 import com.tencent.supersonic.headless.server.pojo.ModelFilter;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public interface ModelService {
 
@@ -27,9 +22,9 @@ public interface ModelService {
 
     ModelResp updateModel(ModelReq datasourceReq, User user) throws Exception;
 
-    List<ModelResp> getModelList(ModelFilter modelFilter);
+    List<ModelResp> getModelList(MetaFilter metaFilter);
 
-    Map<Long, ModelResp> getModelMap();
+    Map<Long, ModelResp> getModelMap(ModelFilter modelFilter);
 
     void deleteModel(Long id, User user);
 
@@ -39,24 +34,18 @@ public interface ModelService {
 
     List<ModelResp> getModelListWithAuth(User user, Long domainId, AuthType authType);
 
-    List<ModelResp> getModelAuthList(User user, AuthType authTypeEnum);
+    List<ModelResp> getModelAuthList(User user, Long domainId, AuthType authTypeEnum);
 
     List<ModelResp> getModelByDomainIds(List<Long> domainIds);
+
+    List<ModelResp> getAllModelByDomainIds(List<Long> domainIds);
 
     ModelResp getModel(Long id);
 
     List<String> getModelAdmin(Long id);
 
-    ModelSchemaResp fetchSingleModelSchema(Long modelId);
-
-    List<ModelSchemaResp> fetchModelSchema(ModelSchemaFilterReq modelSchemaFilterReq);
-
     DatabaseResp getDatabaseByModelId(Long modelId);
 
     void batchUpdateStatus(MetaBatchReq metaBatchReq, User user);
-
-    void getModelYamlTplByModelIds(Set<Long> modelIds, Map<String, List<DimensionYamlTpl>> dimensionYamlMap,
-            List<DataModelYamlTpl> dataModelYamlTplList, List<MetricYamlTpl> metricYamlTplList,
-            Map<Long, String> modelIdName);
 
 }

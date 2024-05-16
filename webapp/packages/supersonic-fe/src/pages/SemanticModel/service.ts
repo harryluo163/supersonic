@@ -1,15 +1,13 @@
 import request from 'umi-request';
 import moment from 'moment';
-import { DatePeridMap } from '@/pages/SemanticModel/constant';
+import { DateRangeType } from '@/components/MDatePicker/type';
+import { IDataSource } from './data';
 
 const getRunningEnv = () => {
   return window.location.pathname.includes('/chatSetting/') ? 'chat' : 'semantic';
 };
 
 export function getDomainList(): Promise<any> {
-  if (getRunningEnv() === 'chat') {
-    return request.get(`${process.env.CHAT_API_BASE_URL}conf/domainList`);
-  }
   return request.get(`${process.env.API_BASE_URL}domain/getDomainList`);
 }
 
@@ -56,10 +54,6 @@ export function getDimensionList(data: any): Promise<any> {
     return request.post(`${process.env.CHAT_API_BASE_URL}conf/dimension/page`, queryParams);
   }
   return request.post(`${process.env.API_BASE_URL}dimension/queryDimension`, queryParams);
-}
-
-export function getCommonDimensionList(domainId: number): Promise<any> {
-  return request.get(`${process.env.API_BASE_URL}commonDimension/getList?domainId=${domainId}`);
 }
 
 export function saveCommonDimension(data: any): Promise<any> {
@@ -119,9 +113,6 @@ export function queryMetric(data: any): Promise<any> {
       ...(modelId ? { modelIds: [modelId] } : {}),
     },
   };
-  if (getRunningEnv() === 'chat') {
-    return request.post(`${process.env.CHAT_API_BASE_URL}conf/metric/page`, queryParams);
-  }
   return request.post(`${process.env.API_BASE_URL}metric/queryMetric`, queryParams);
 }
 
@@ -150,7 +141,7 @@ export function batchUpdateDimensionStatus(data: any): Promise<any> {
 }
 
 export async function batchDownloadMetric(data: any): Promise<any> {
-  const response = await request.post(`${process.env.API_BASE_URL}query/download/batch`, {
+  const response = await request.post(`${process.env.API_BASE_URL}query/downloadBatch/metric`, {
     responseType: 'blob',
     getResponse: true,
     data,
@@ -253,12 +244,6 @@ export function getDomainExtendConfig(data: any): Promise<any> {
   return request(`${process.env.CHAT_API_BASE_URL}conf/search`, {
     method: 'POST',
     data,
-  });
-}
-
-export function getDomainExtendDetailConfig(data: any): Promise<any> {
-  return request(`${process.env.CHAT_API_BASE_URL}conf/richDesc/${data.modelId}`, {
-    method: 'GET',
   });
 }
 
@@ -370,6 +355,7 @@ export function testDatabaseConnect(data: SaveDatabaseParams): Promise<any> {
 type ExcuteSqlParams = {
   sql: string;
   id: number;
+  sqlVariables: IDataSource.ISqlParamsItem[];
 };
 
 // 执行脚本
@@ -426,6 +412,13 @@ export function deleteModel(modelId: number): Promise<any> {
   });
 }
 
+export function getUnAvailableItem(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}model/getUnAvailableItem`, {
+    method: 'POST',
+    data,
+  });
+}
+
 export function getModelDetail(data: any): Promise<any> {
   return request.get(`${process.env.API_BASE_URL}model/getModel/${data.modelId}`);
 }
@@ -436,22 +429,52 @@ export function getMetricsToCreateNewMetric(data: any): Promise<any> {
   );
 }
 
+export function getAllModelByDomainId(domainId: number): Promise<any> {
+  return request(`${process.env.API_BASE_URL}model/getAllModelByDomainId`, {
+    method: 'GET',
+    params: {
+      domainId,
+    },
+  });
+}
+
 export function createDictTask(data: any): Promise<any> {
-  return request(`${process.env.CHAT_API_BASE_URL}dict/task`, {
+  return request(`${process.env.API_BASE_URL}knowledge/task`, {
     method: 'POST',
+    data,
+  });
+}
+
+export function createDictConfig(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}knowledge/conf`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function editDictConfig(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}knowledge/conf`, {
+    method: 'PUT',
     data,
   });
 }
 
 export function deleteDictTask(data: any): Promise<any> {
-  return request(`${process.env.CHAT_API_BASE_URL}dict/task/delete`, {
-    method: 'POST',
+  return request(`${process.env.API_BASE_URL}knowledge/task/delete`, {
+    method: 'PUT',
     data,
   });
 }
 
 export function searchDictLatestTaskList(data: any): Promise<any> {
-  return request(`${process.env.CHAT_API_BASE_URL}dict/task/search/latest`, {
+  return request(`${process.env.API_BASE_URL}knowledge/task/search`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function searchKnowledgeConfigQuery(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}knowledge/conf/query`, {
     method: 'POST',
     data,
   });
@@ -469,53 +492,47 @@ const downloadStruct = (blob: Blob) => {
 };
 
 export function queryDimValue(data: any): Promise<any> {
-  return request(`${process.env.API_BASE_URL}query/queryDimValue`, {
+  return request(`${process.env.API_BASE_URL}dimension/queryDimValue`, {
     method: 'POST',
     data,
   });
 }
 
 export async function queryStruct({
-  modelIds,
-  bizName,
+  domainId,
   dateField = 'sys_imp_date',
   startDate,
   endDate,
   download = false,
-  groups = [],
-  dimensionFilters = [],
+  period = DateRangeType.DAY,
+  dimensionIds = [],
+  metricIds,
+  filters = [],
   isTransform,
 }: {
-  modelIds: number[];
-  bizName: string;
+  domainId: number;
+  metricIds: number[];
   dateField: string;
   startDate: string;
   endDate: string;
   download?: boolean;
-  groups?: string[];
-  dimensionFilters?: string[];
+  dimensionIds: number[];
+  period: DateRangeType;
+  filters?: string[];
   isTransform: boolean;
 }): Promise<any> {
   const response = await request(
-    `${process.env.API_BASE_URL}query/${download ? 'download/' : ''}struct`,
+    `${process.env.API_BASE_URL}query/${download ? 'download/' : ''}metric`,
     {
       method: 'POST',
       ...(download ? { responseType: 'blob', getResponse: true } : {}),
       data: {
-        modelIds,
-        groups: [dateField, ...groups],
-        dimensionFilters,
+        domainId,
+        filters,
         isTransform,
-        aggregators: [
-          {
-            column: bizName,
-            // func: 'SUM',
-            nameCh: 'null',
-            args: null,
-          },
-        ],
-        orders: [],
-        metricFilters: [],
+        metricIds,
+        dimensionIds,
+        orders: [{ column: dateField, direction: 'desc' }],
         params: [],
         dateInfo: {
           dateMode: 'BETWEEN',
@@ -523,8 +540,8 @@ export async function queryStruct({
           endDate,
           dateList: [],
           unit: 7,
-          // period: 'DAY',
-          period: DatePeridMap[dateField],
+          groupByDate: true,
+          period,
           text: 'null',
         },
         limit: 2000,
@@ -539,16 +556,24 @@ export async function queryStruct({
   }
 }
 
-export function metricStarState(data: { id: number; state: boolean }): Promise<any> {
-  const { id, state } = data;
+export function indicatorStarState(data: {
+  id: number;
+  type: string;
+  state: boolean;
+}): Promise<any> {
+  const { id, state, type } = data;
   if (state) {
     return request(`${process.env.API_BASE_URL}collect/createCollectionIndicators`, {
       method: 'POST',
-      data: { id },
+      data: { collectId: id, type },
     });
   } else {
-    return request(`${process.env.API_BASE_URL}collect/deleteCollectionIndicators/${id}`, {
-      method: 'DELETE',
+    // return request(`${process.env.API_BASE_URL}collect/deleteCollectionIndicators/${id}`, {
+    //   method: 'DELETE',
+    // });
+    return request(`${process.env.API_BASE_URL}collect/deleteCollectionIndicators`, {
+      method: 'POST',
+      data: { collectId: id, type },
     });
   }
 }
@@ -559,4 +584,160 @@ export function getDatabaseParameters(): Promise<any> {
 
 export function getDatabaseDetail(id: number): Promise<any> {
   return request.get(`${process.env.API_BASE_URL}database/${id}`);
+}
+
+export function getViewList(domainId: number): Promise<any> {
+  return request(`${process.env.API_BASE_URL}dataSet/getDataSetList`, {
+    method: 'GET',
+    params: { domainId },
+  });
+}
+
+export function createView(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}dataSet`, {
+    method: 'POST',
+    data,
+  });
+}
+export function updateView(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}dataSet`, {
+    method: 'PUT',
+    data,
+  });
+}
+
+export function deleteView(viewId: number): Promise<any> {
+  return request(`${process.env.API_BASE_URL}dataSet/${viewId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function getTagList(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tag/queryTag/market`, {
+    method: 'POST',
+    data: { pageSize: 9999, ...data },
+  });
+}
+
+export function deleteTag(tagId: number): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tag/delete/${tagId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function batchUpdateTagStatus(data: any): Promise<any> {
+  return request.post(`${process.env.API_BASE_URL}tag/batchUpdateStatus`, {
+    data,
+  });
+}
+
+export function createTag(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tag/create`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function updateTag(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tag/update`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function getTagData(tagId: number): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tag/getTag/${tagId}`, {
+    method: 'GET',
+  });
+}
+
+export function getTagValueDistribution(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tag/value/distribution`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function batchCreateTag(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tag/create/batch`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function batchDeleteTag(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tag/delete/batch`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function batchMetricPublish(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}metric/batchPublish`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function batchMetricUnPublish(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}metric/batchUnPublish`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function createTagObject(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tagObject/create`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function updateTagObject(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tagObject/update`, {
+    method: 'POST',
+    data,
+  });
+}
+
+export function deleteTagObject(id: number): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tagObject/delete/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export function getTagObjectList(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}tagObject/query`, {
+    method: 'POST',
+    data: { pageSize: 9999, status: 1, ...data },
+  });
+}
+
+export function getMetricClassifications(): Promise<any> {
+  return request(`${process.env.API_BASE_URL}metric/getMetricClassifications`, {
+    method: 'GET',
+  });
+}
+
+export function batchUpdateClassifications(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}metric/batchUpdateClassifications`, {
+    method: 'POST',
+    data: { ...data },
+  });
+}
+
+export function getTermList(domainId: number): Promise<any> {
+  return request(`${process.env.API_BASE_URL}term`, {
+    method: 'GET',
+    params: {
+      domainId,
+    },
+  });
+}
+
+export function saveOrUpdate(data: any): Promise<any> {
+  return request(`${process.env.API_BASE_URL}term/saveOrUpdate`, {
+    method: 'POST',
+    data: { ...data },
+  });
 }

@@ -1,32 +1,35 @@
-import type { ActionType, ProColumns } from '@ant-design/pro-table';
-import ProTable from '@ant-design/pro-table';
-import { message, Button, Space, Popconfirm, Input, Select } from 'antd';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ProTable } from '@ant-design/pro-components';
+import { message, Button, Space, Popconfirm, Input, Select, Tag } from 'antd';
 import React, { useRef, useState, useEffect } from 'react';
 import type { Dispatch } from 'umi';
 import { StatusEnum } from '../enum';
-import { connect } from 'umi';
+import { connect, history } from 'umi';
 import type { StateType } from '../model';
-import { SENSITIVE_LEVEL_ENUM, SENSITIVE_LEVEL_OPTIONS } from '../constant';
+import { SENSITIVE_LEVEL_ENUM, SENSITIVE_LEVEL_OPTIONS, TAG_DEFINE_TYPE } from '../constant';
 import {
   queryMetric,
   deleteMetric,
   batchUpdateMetricStatus,
   batchDownloadMetric,
+  batchCreateTag,
+  batchMetricPublish,
+  batchMetricUnPublish,
 } from '../service';
-
 import MetricInfoCreateForm from './MetricInfoCreateForm';
 import BatchCtrlDropDownButton from '@/components/BatchCtrlDropDownButton';
-import moment from 'moment';
+import TableHeaderFilter from './TableHeaderFilter';
 import styles from './style.less';
 import { ISemantic } from '../data';
-import { ColumnsConfig } from './MetricTableColumnRender';
+import { ColumnsConfig } from './TableColumnRender';
 
 type Props = {
+  onEmptyMetricData?: () => void;
   dispatch: Dispatch;
   domainManger: StateType;
 };
 
-const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
+const ClassMetricTable: React.FC<Props> = ({ onEmptyMetricData, domainManger, dispatch }) => {
   const { selectModelId: modelId, selectDomainId } = domainManger;
   const [createModalVisible, setCreateModalVisible] = useState<boolean>(false);
   const [metricItem, setMetricItem] = useState<ISemantic.IMetricItem>();
@@ -38,7 +41,9 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
     pageSize: 20,
     total: 0,
   };
+  const initState = useRef<boolean>(false);
   const [pagination, setPagination] = useState(defaultPagination);
+
   const [filterParams, setFilterParams] = useState<Record<string, any>>({});
 
   const actionRef = useRef<ActionType>();
@@ -52,6 +57,54 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
     const { code, msg } = await batchUpdateMetricStatus({
       ids,
       status,
+    });
+    if (code === 200) {
+      queryMetricList({ ...filterParams, ...defaultPagination });
+      dispatch({
+        type: 'domainManger/queryMetricList',
+        payload: {
+          modelId,
+        },
+      });
+      return;
+    }
+    message.error(msg);
+  };
+
+  const queryBatchExportTag = async (ids: React.Key[]) => {
+    if (Array.isArray(ids) && ids.length === 0) {
+      return;
+    }
+    setLoading(true);
+    const { code, msg } = await batchCreateTag(
+      ids.map((id) => {
+        return {
+          itemId: id,
+          tagDefineType: TAG_DEFINE_TYPE.METRIC,
+        };
+      }),
+    );
+    setLoading(false);
+    if (code === 200) {
+      queryMetricList({ ...filterParams, ...defaultPagination });
+      dispatch({
+        type: 'domainManger/queryMetricList',
+        payload: {
+          modelId,
+        },
+      });
+      return;
+    }
+    message.error(msg);
+  };
+
+  const queryBatchUpdatePublish = async (ids: React.Key[], status: boolean) => {
+    if (Array.isArray(ids) && ids.length === 0) {
+      return;
+    }
+    const queryPublish = status ? batchMetricPublish : batchMetricUnPublish;
+    const { code, msg } = await queryPublish({
+      ids,
     });
     if (code === 200) {
       queryMetricList({ ...filterParams, ...defaultPagination });
@@ -86,6 +139,11 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
         current: pageNum,
         total,
       });
+
+      if (list.length === 0 && !initState.current) {
+        onEmptyMetricData?.();
+      }
+      initState.current = true;
       setTableData(list);
     } else {
       message.error(msg);
@@ -93,79 +151,91 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
     }
   };
 
+  const columnsConfig = ColumnsConfig();
+
   const columns: ProColumns[] = [
+    {
+      dataIndex: 'id',
+      title: 'ID',
+      width: 80,
+      fixed: 'left',
+      search: false,
+    },
     {
       dataIndex: 'name',
       title: '指标',
-      width: '30%',
+      // width: 280,
+      fixed: 'left',
+      width: '20%',
       search: false,
-      render: ColumnsConfig.metricInfo.render,
+      render: columnsConfig.indicatorInfo.render,
     },
     {
       dataIndex: 'key',
       title: '指标搜索',
       hideInTable: true,
-      renderFormItem: () => (
-        <Input.Search
-          placeholder="请输入ID/指标名称/英文名称/标签"
-          onSearch={(value) => {
-            setFilterParams((preState) => {
-              return {
-                ...preState,
-                key: value,
-              };
-            });
-          }}
-        />
-      ),
     },
     {
       dataIndex: 'sensitiveLevel',
       title: '敏感度',
-      hideInTable: true,
+      // width: 100,
       valueEnum: SENSITIVE_LEVEL_ENUM,
-      renderFormItem: () => (
-        <Select
-          options={SENSITIVE_LEVEL_OPTIONS}
-          placeholder="请选择敏感度"
-          allowClear
-          onChange={(value) => {
-            setFilterParams((preState) => {
-              return {
-                ...preState,
-                sensitiveLevel: value,
-              };
-            });
-          }}
-        />
-      ),
+      render: columnsConfig.sensitiveLevel.render,
+    },
+
+    {
+      dataIndex: 'isTag',
+      title: '是否标签',
+      // width: 90,
+      render: (isTag) => {
+        switch (isTag) {
+          case 0:
+            return '否';
+          case 1:
+            return <span style={{ color: '#1677ff' }}>是</span>;
+          default:
+            return <Tag color="default">未知</Tag>;
+        }
+      },
     },
     {
-      dataIndex: 'description',
-      title: '描述',
+      dataIndex: 'isPublish',
+      title: '是否发布',
+      // width: 90,
       search: false,
+      render: (isPublish) => {
+        switch (isPublish) {
+          case 0:
+            return '否';
+          case 1:
+            return <span style={{ color: '#1677ff' }}>是</span>;
+          default:
+            return <Tag color="default">未知</Tag>;
+        }
+      },
     },
     {
       dataIndex: 'status',
       title: '状态',
-      width: 200,
+      // width: 100,
       search: false,
-      render: ColumnsConfig.state.render,
+      render: columnsConfig.state.render,
     },
-
     {
-      dataIndex: 'updatedAt',
-      title: '更新时间',
-      width: 180,
+      dataIndex: 'description',
+      title: '描述',
+      width: 300,
       search: false,
-      render: (value: any) => {
-        return value && value !== '-' ? moment(value).format('YYYY-MM-DD HH:mm:ss') : '-';
-      },
+      render: columnsConfig.description.render,
+    },
+    {
+      ...columnsConfig.createInfo,
     },
     {
       title: '操作',
       dataIndex: 'x',
       valueType: 'option',
+      fixed: 'right',
       width: 150,
       render: (_, record) => {
         return (
@@ -245,6 +315,15 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
       case 'batchStop':
         queryBatchUpdateStatus(selectedRowKeys, StatusEnum.OFFLINE);
         break;
+      case 'exportTagButton':
+        queryBatchExportTag(selectedRowKeys);
+        break;
+      case 'batchPublish':
+        queryBatchUpdatePublish(selectedRowKeys, true);
+        break;
+      case 'batchUnPublish':
+        queryBatchUpdatePublish(selectedRowKeys, false);
+        break;
       default:
         break;
     }
@@ -274,14 +353,75 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
   return (
     <>
       <ProTable
-        className={`${styles.classTable} ${styles.classTableSelectColumnAlignLeft}`}
+        className={`${styles.classTable} ${styles.classTableSelectColumnAlignLeft} ${styles.disabledSearchTable} `}
         actionRef={actionRef}
+        headerTitle={
+          <TableHeaderFilter
+            components={[
+              {
+                label: '指标搜索',
+                component: (
+                  <Input.Search
+                    style={{ width: 280 }}
+                    placeholder="请输入ID/指标名称/英文名称/标签"
+                    onSearch={(value) => {
+                      setFilterParams((preState) => {
+                        return {
+                          ...preState,
+                          key: value,
+                        };
+                      });
+                    }}
+                  />
+                ),
+              },
+              {
+                label: '敏感度',
+                component: (
+                  <Select
+                    style={{ width: 140 }}
+                    options={SENSITIVE_LEVEL_OPTIONS}
+                    placeholder="请选择敏感度"
+                    allowClear
+                    onChange={(value) => {
+                      setFilterParams((preState) => {
+                        return {
+                          ...preState,
+                          sensitiveLevel: value,
+                        };
+                      });
+                    }}
+                  />
+                ),
+              },
+              {
+                label: '是否为标签',
+                component: (
+                  <Select
+                    style={{ width: 145 }}
+                    placeholder="请选择标签状态"
+                    allowClear
+                    onChange={(value) => {
+                      setFilterParams((preState) => {
+                        return {
+                          ...preState,
+                          isTag: value,
+                        };
+                      });
+                    }}
+                    options={[
+                      { value: 1, label: '是' },
+                      { value: 0, label: '否' },
+                    ]}
+                  />
+                ),
+              },
+            ]}
+          />
+        }
         rowKey="id"
         loading={loading}
-        search={{
-          optionRender: false,
-          collapsed: false,
-        }}
+        search={false}
         rowSelection={{
           type: 'checkbox',
           ...rowSelection,
@@ -303,6 +443,7 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
           setPagination(currentPagin);
           queryMetricList({ ...filterParams, ...currentPagin });
         }}
+        scroll={{ x: 1500 }}
         sticky={{ offsetHeader: 0 }}
         size="large"
         options={{ reload: false, density: false, fullScreen: false }}
@@ -320,6 +461,7 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
           <BatchCtrlDropDownButton
             key="ctrlBtnList"
             downloadLoading={downloadLoading}
+            extenderList={['batchPublish', 'batchUnPublish', 'exportTagButton']}
             onDeleteConfirm={() => {
               queryBatchUpdateStatus(selectedRowKeys, StatusEnum.DELETED);
             }}

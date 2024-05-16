@@ -1,18 +1,16 @@
 package com.tencent.supersonic.chat.server.processor.parse;
 
-import com.tencent.supersonic.chat.api.pojo.SemanticParseInfo;
-import com.tencent.supersonic.chat.api.pojo.response.EntityInfo;
-import com.tencent.supersonic.chat.api.pojo.response.ParseResp;
-import com.tencent.supersonic.chat.core.pojo.ChatContext;
-import com.tencent.supersonic.chat.core.pojo.QueryContext;
-import com.tencent.supersonic.chat.core.query.QueryManager;
-import com.tencent.supersonic.chat.core.query.SemanticQuery;
-import com.tencent.supersonic.chat.core.query.llm.analytics.MetricAnalyzeQuery;
-import com.tencent.supersonic.chat.server.service.SemanticService;
+import com.tencent.supersonic.chat.server.pojo.ChatParseContext;
 import com.tencent.supersonic.common.util.ContextUtils;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.tencent.supersonic.headless.api.pojo.DataSetSchema;
+import com.tencent.supersonic.headless.api.pojo.EntityInfo;
+import com.tencent.supersonic.headless.api.pojo.SemanticParseInfo;
+import com.tencent.supersonic.headless.api.pojo.response.ParseResp;
+import com.tencent.supersonic.headless.core.chat.query.QueryManager;
+import com.tencent.supersonic.headless.server.service.impl.SemanticService;
 import org.springframework.util.CollectionUtils;
+
+import java.util.List;
 
 /**
  * EntityInfoProcessor fills core attributes of an entity so that
@@ -21,22 +19,20 @@ import org.springframework.util.CollectionUtils;
 public class EntityInfoProcessor implements ParseResultProcessor {
 
     @Override
-    public void process(ParseResp parseResp, QueryContext queryContext, ChatContext chatContext) {
-        List<SemanticQuery> semanticQueries = queryContext.getCandidateQueries();
-        if (CollectionUtils.isEmpty(semanticQueries)) {
+    public void process(ChatParseContext chatParseContext, ParseResp parseResp) {
+        List<SemanticParseInfo> selectedParses = parseResp.getSelectedParses();
+        if (CollectionUtils.isEmpty(selectedParses)) {
             return;
         }
-        List<SemanticParseInfo> selectedParses = semanticQueries.stream().map(SemanticQuery::getParseInfo)
-                .collect(Collectors.toList());
         selectedParses.forEach(parseInfo -> {
             String queryMode = parseInfo.getQueryMode();
-            if (QueryManager.containsPluginQuery(queryMode)
-                    || MetricAnalyzeQuery.QUERY_MODE.equalsIgnoreCase(queryMode)) {
+            if (QueryManager.containsRuleQuery(queryMode)) {
                 return;
             }
             //1. set entity info
             SemanticService semanticService = ContextUtils.getBean(SemanticService.class);
-            EntityInfo entityInfo = semanticService.getEntityInfo(parseInfo, queryContext.getUser());
+            DataSetSchema dataSetSchema = semanticService.getDataSetSchema(parseInfo.getDataSetId());
+            EntityInfo entityInfo = semanticService.getEntityInfo(parseInfo, dataSetSchema, chatParseContext.getUser());
             if (QueryManager.isTagQuery(queryMode)
                     || QueryManager.isMetricQuery(queryMode)) {
                 parseInfo.setEntityInfo(entityInfo);

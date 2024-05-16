@@ -23,12 +23,8 @@ type Props = {
   [key: string]: any;
 };
 
-// type TaskStateMap = Record<string, DictTaskState>;
-
 const DimensionMetricVisibleTableTransfer: React.FC<Props> = ({
-  // domainManger,
   knowledgeInfosMap,
-  // onKnowledgeInfosMapChange,
   ...restProps
 }) => {
   let rightColumns: ColumnsType<RecordType> = [
@@ -57,6 +53,21 @@ const DimensionMetricVisibleTableTransfer: React.FC<Props> = ({
       render: (type) => {
         return <TransTypeTag type={type} />;
       },
+    },
+    {
+      dataIndex: 'isTag',
+      title: '是否标签',
+      // hidden: true,
+      render: (isTag) => {
+        if (isTag) {
+          return <span style={{ color: '#0958d9' }}>是</span>;
+        }
+        return '否';
+      },
+    },
+    {
+      dataIndex: 'modelName',
+      title: '所属模型',
     },
   ];
   if (!knowledgeInfosMap) {

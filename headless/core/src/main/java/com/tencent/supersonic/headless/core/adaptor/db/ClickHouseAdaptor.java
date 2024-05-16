@@ -1,6 +1,6 @@
 package com.tencent.supersonic.headless.core.adaptor.db;
 
-import com.tencent.supersonic.common.util.jsqlparser.SqlParserReplaceHelper;
+import com.tencent.supersonic.common.util.jsqlparser.SqlReplaceHelper;
 import com.tencent.supersonic.common.pojo.enums.TimeDimensionEnum;
 import com.tencent.supersonic.common.pojo.Constants;
 import java.util.HashMap;
@@ -12,7 +12,7 @@ public class ClickHouseAdaptor extends DbAdaptor {
     public String getDateFormat(String dateType, String dateFormat, String column) {
         if (dateFormat.equalsIgnoreCase(Constants.DAY_FORMAT_INT)) {
             if (TimeDimensionEnum.MONTH.name().equalsIgnoreCase(dateType)) {
-                return "formatDateTime(toDate(parseDateTimeBestEffort(toString(%s))),'%Y-%m')".replace("%s", column);
+                return "toYYYYMM(toDate(parseDateTimeBestEffort(toString(%s))))".replace("%s", column);
             } else if (TimeDimensionEnum.WEEK.name().equalsIgnoreCase(dateType)) {
                 return "toMonday(toDate(parseDateTimeBestEffort(toString(%s))))".replace("%s", column);
             } else {
@@ -49,7 +49,7 @@ public class ClickHouseAdaptor extends DbAdaptor {
         functionMap.put("MONTH".toLowerCase(), "toMonth");
         functionMap.put("DAY".toLowerCase(), "toDayOfMonth");
         functionMap.put("YEAR".toLowerCase(), "toYear");
-        return SqlParserReplaceHelper.replaceFunction(sql, functionMap);
+        return SqlReplaceHelper.replaceFunction(sql, functionMap);
     }
 
     @Override

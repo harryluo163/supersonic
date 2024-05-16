@@ -1,7 +1,7 @@
 import React, { ReactNode } from 'react';
 import { AGG_TYPE_MAP, PREFIX_CLS } from '../../common/constants';
 import { ChatContextType, DateInfoType, EntityInfoType, FilterItemType } from '../../common/type';
-import { Button, DatePicker, Tag } from 'antd';
+import { Button, DatePicker } from 'antd';
 import { CheckCircleFilled, ReloadOutlined } from '@ant-design/icons';
 import Loading from './Loading';
 import FilterItem from './FilterItem';
@@ -89,7 +89,7 @@ const ParseTip: React.FC<Props> = ({
 
   const {
     modelId,
-    model,
+    dataSet,
     dimensions,
     metrics,
     aggType,
@@ -148,19 +148,15 @@ const ParseTip: React.FC<Props> = ({
               </div>
             ) : (
               <div className={`${prefixCls}-tip-item`}>
-                <div className={`${prefixCls}-tip-item-name`}>数据模型：</div>
-                <div className={itemValueClass}>
-                  {model?.modelNames?.length === 1
-                    ? model.modelNames[0]
-                    : model?.modelNames?.map(modelName => <Tag key={modelName}>{modelName}</Tag>)}
-                </div>
+                <div className={`${prefixCls}-tip-item-name`}>数据集：</div>
+                <div className={itemValueClass}>{dataSet?.name}</div>
               </div>
             )}
-            {(queryType === 'METRIC' || queryType === 'METRIC_TAG' || queryType === 'TAG') && (
+            {(queryType === 'METRIC' || queryType === 'METRIC_ID' || queryType === 'TAG') && (
               <div className={`${prefixCls}-tip-item`}>
                 <div className={`${prefixCls}-tip-item-name`}>查询模式：</div>
                 <div className={itemValueClass}>
-                  {queryType === 'METRIC' || queryType === 'METRIC_TAG' ? '指标模式' : '标签模式'}
+                  {queryType === 'METRIC' || queryType === 'METRIC_ID' ? '指标模式' : '标签模式'}
                 </div>
               </div>
             )}
@@ -171,7 +167,7 @@ const ParseTip: React.FC<Props> = ({
                 <div className={`${prefixCls}-tip-item`}>
                   <div className={`${prefixCls}-tip-item-name`}>指标：</div>
                   <div className={itemValueClass}>
-                    {queryType === 'METRIC' || queryType === 'METRIC_TAG'
+                    {queryType === 'METRIC' || queryType === 'ID'
                       ? metrics[0].name
                       : metrics.map(metric => metric.name).join('、')}
                   </div>

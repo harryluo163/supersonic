@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Tag, Space } from 'antd';
-import ProTable from '@ant-design/pro-table';
-import ProCard from '@ant-design/pro-card';
+import { ProTable } from '@ant-design/pro-components';
+import { ProCard } from  '@ant-design/pro-components';
 import SqlEditor from '@/components/SqlEditor';
 import FormLabelRequire from './FormLabelRequire';
 import styles from './style.less';
@@ -10,14 +10,12 @@ import { ISemantic } from '../data';
 type Props = {
   typeParams: ISemantic.IMetricTypeParams;
   metricList: ISemantic.IMetricItem[];
-  // selectedMeasuresList: any;
   onFieldChange: (metrics: ISemantic.IMetricTypeParamsItem[]) => void;
   onSqlChange: (sql: string) => void;
 };
 
 const MetricMetricFormTable: React.FC<Props> = ({
   typeParams,
-  // selectedMeasuresList = [],
   metricList,
   onFieldChange,
   onSqlChange,
@@ -49,11 +47,18 @@ const MetricMetricFormTable: React.FC<Props> = ({
 
   // const [selectMeasuresList, setSelectMeasuresList] = useState<IDataSource.IMeasuresItem[]>([]);
 
-  const [selectedMeasuresKeys, setSelectedMeasuresKeys] = useState<string[]>(() => {
+  const [selectedKeys, setSelectedKeys] = useState<string[]>(() => {
     // return [];
     return defineTypeParams.metrics.map((item: any) => {
       return item.bizName;
     });
+  });
+
+  const [selectedKeysMap, setSelectedKeysMap] = useState<Record<string, boolean>>(() => {
+    return defineTypeParams.metrics.reduce((keyMap, item: any) => {
+      keyMap[item.bizName] = true;
+      return keyMap;
+    }, {});
   });
 
   const columns = [
@@ -67,24 +72,43 @@ const MetricMetricFormTable: React.FC<Props> = ({
     },
   ];
 
+  const handleUpdateKeys = (updateKeys: Record<string, boolean>) => {
+    setSelectedKeysMap(updateKeys);
+    const selectedKeys: string[] = [];
+    const metrics = metricList.reduce((list: any[], item) => {
+      const { bizName, id } = item;
+      if (updateKeys[bizName] === true) {
+        selectedKeys.push(bizName);
+        list.push({
+          bizName,
+          id,
+        });
+      }
+      return list;
+    }, []);
+    setSelectedKeys(selectedKeys);
+    onFieldChange(metrics);
+  };
+
   const rowSelection = {
-    selectedRowKeys: selectedMeasuresKeys,
-    onChange: (_selectedRowKeys: any[]) => {
-      setSelectedMeasuresKeys([..._selectedRowKeys]);
-      onFieldChange(
-        metricList.reduce(
-          (metrics: ISemantic.IMetricTypeParamsItem[], item: ISemantic.IMetricItem) => {
-            if (_selectedRowKeys.includes(item.bizName)) {
-              metrics.push({
-                bizName: item.bizName,
-                id: item.id,
-              });
-            }
-            return metrics;
-          },
-          [],
-        ),
+    selectedRowKeys: selectedKeys,
+    onSelect: (record: ISemantic.IMeasure, selected: boolean) => {
+      const updateKeys = { ...selectedKeysMap, [record.bizName]: selected };
+      handleUpdateKeys(updateKeys);
+    },
+    onSelectAll: (
+      selected: boolean,
+      selectedRows: ISemantic.IMetricItem[],
+      changeRows: ISemantic.IMetricItem[],
+    ) => {
+      const updateKeys = changeRows.reduce(
+        (keyMap: Record<string, boolean>, item: ISemantic.IMetricItem) => {
+          keyMap[item.bizName] = selected;
+          return keyMap;
+        },
+        {},
       );
+      handleUpdateKeys({ ...selectedKeysMap, ...updateKeys });
     },
   };
 
@@ -97,7 +121,7 @@ const MetricMetricFormTable: React.FC<Props> = ({
           rowKey="bizName"
           columns={columns}
           dataSource={tableData}
-          pagination={false}
+          // pagination={false}
           search={false}
           toolbar={{
             search: {
@@ -117,13 +141,14 @@ const MetricMetricFormTable: React.FC<Props> = ({
               },
             },
           }}
+          pagination={{ defaultPageSize: 10 }}
           size="small"
           options={false}
           tableAlertRender={false}
           scroll={{ y: 500 }}
           rowSelection={rowSelection}
         />
-        <ProCard title={<FormLabelRequire title="指标表达式" />} tooltip="">
+        <ProCard title={<FormLabelRequire title="表达式" />} tooltip="">
           <p
             className={styles.desc}
             style={{ border: 'unset', padding: 0, marginBottom: 20, marginLeft: 2 }}

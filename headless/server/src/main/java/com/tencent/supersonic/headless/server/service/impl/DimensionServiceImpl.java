@@ -7,6 +7,7 @@ import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.google.common.collect.Lists;
 import com.tencent.supersonic.auth.api.authentication.pojo.User;
+import com.tencent.supersonic.common.pojo.Constants;
 import com.tencent.supersonic.common.pojo.DataEvent;
 import com.tencent.supersonic.common.pojo.DataItem;
 import com.tencent.supersonic.common.pojo.ModelRela;
@@ -17,24 +18,34 @@ import com.tencent.supersonic.common.pojo.exception.InvalidArgumentException;
 import com.tencent.supersonic.common.util.ChatGptHelper;
 import com.tencent.supersonic.headless.api.pojo.DimValueMap;
 import com.tencent.supersonic.headless.api.pojo.ModelDetail;
+import com.tencent.supersonic.headless.api.pojo.enums.TagDefineType;
 import com.tencent.supersonic.headless.api.pojo.request.DimensionReq;
 import com.tencent.supersonic.headless.api.pojo.request.MetaBatchReq;
 import com.tencent.supersonic.headless.api.pojo.request.PageDimensionReq;
+import com.tencent.supersonic.headless.api.pojo.response.DataSetResp;
 import com.tencent.supersonic.headless.api.pojo.response.DatabaseResp;
 import com.tencent.supersonic.headless.api.pojo.response.DimensionResp;
 import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
 import com.tencent.supersonic.headless.api.pojo.response.SemanticQueryResp;
+import com.tencent.supersonic.headless.api.pojo.response.TagItem;
 import com.tencent.supersonic.headless.server.persistence.dataobject.DimensionDO;
+import com.tencent.supersonic.headless.server.persistence.dataobject.TagDO;
 import com.tencent.supersonic.headless.server.persistence.repository.DimensionRepository;
 import com.tencent.supersonic.headless.server.pojo.DimensionFilter;
+import com.tencent.supersonic.headless.server.pojo.DimensionsFilter;
 import com.tencent.supersonic.headless.server.pojo.MetaFilter;
+import com.tencent.supersonic.headless.server.pojo.ModelFilter;
+import com.tencent.supersonic.headless.server.pojo.TagFilter;
+import com.tencent.supersonic.headless.server.service.DataSetService;
 import com.tencent.supersonic.headless.server.service.DatabaseService;
 import com.tencent.supersonic.headless.server.service.DimensionService;
 import com.tencent.supersonic.headless.server.service.ModelRelaService;
 import com.tencent.supersonic.headless.server.service.ModelService;
+import com.tencent.supersonic.headless.server.service.TagMetaService;
 import com.tencent.supersonic.headless.server.utils.DimensionConverter;
 import com.tencent.supersonic.headless.server.utils.NameCheckUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -46,6 +57,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -63,6 +75,10 @@ public class DimensionServiceImpl implements DimensionService {
 
     private ModelRelaService modelRelaService;
 
+    private DataSetService dataSetService;
+
+    private TagMetaService tagMetaService;
+
     @Autowired
     private ApplicationEventPublisher eventPublisher;
 
@@ -71,21 +87,26 @@ public class DimensionServiceImpl implements DimensionService {
                                 ModelService modelService,
                                 ChatGptHelper chatGptHelper,
                                 DatabaseService databaseService,
-                                ModelRelaService modelRelaService) {
+                                ModelRelaService modelRelaService,
+                                DataSetService dataSetService,
+                                TagMetaService tagMetaService) {
         this.modelService = modelService;
         this.dimensionRepository = dimensionRepository;
         this.chatGptHelper = chatGptHelper;
         this.databaseService = databaseService;
         this.modelRelaService = modelRelaService;
+        this.dataSetService = dataSetService;
+        this.tagMetaService = tagMetaService;
     }
 
     @Override
-    public void createDimension(DimensionReq dimensionReq, User user) {
+    public DimensionResp createDimension(DimensionReq dimensionReq, User user) {
         checkExist(Lists.newArrayList(dimensionReq));
         dimensionReq.createdBy(user.getName());
         DimensionDO dimensionDO = DimensionConverter.convert2DimensionDO(dimensionReq);
         dimensionRepository.createDimension(dimensionDO);
         sendEventBatch(Lists.newArrayList(dimensionDO), EventType.ADD);
+        return DimensionConverter.convert2DimensionResp(dimensionDO);
     }
 
     @Override
@@ -94,7 +115,7 @@ public class DimensionServiceImpl implements DimensionService {
             return;
         }
         Long modelId = dimensionReqs.get(0).getModelId();
-        List<DimensionResp> dimensionResps = getDimensionInSameDomain(modelId);
+        List<DimensionResp> dimensionResps = getDimensions(modelId);
         Map<String, DimensionResp> bizNameMap = dimensionResps.stream()
                 .collect(Collectors.toMap(DimensionResp::getBizName, a -> a, (k1, k2) -> k1));
         Map<String, DimensionResp> nameMap = dimensionResps.stream()
@@ -123,9 +144,9 @@ public class DimensionServiceImpl implements DimensionService {
         DimensionConverter.convert(dimensionDO, dimensionReq);
         dimensionRepository.updateDimension(dimensionDO);
         if (!oldName.equals(dimensionDO.getName())) {
-            sendEvent(DataItem.builder().modelId(dimensionDO.getModelId()).newName(dimensionReq.getName())
-                    .name(oldName).type(TypeEnums.DIMENSION)
-                    .id(dimensionDO.getId()).build(), EventType.UPDATE);
+            sendEvent(DataItem.builder().modelId(dimensionDO.getModelId() + Constants.UNDERLINE)
+                    .newName(dimensionReq.getName()).name(oldName).type(TypeEnums.DIMENSION)
+                    .id(dimensionDO.getId() + Constants.UNDERLINE).build(), EventType.UPDATE);
         }
     }
 
@@ -202,7 +223,7 @@ public class DimensionServiceImpl implements DimensionService {
                 .doSelectPageInfo(() -> queryDimension(dimensionFilter));
         PageInfo<DimensionResp> pageInfo = new PageInfo<>();
         BeanUtils.copyProperties(dimensionDOPageInfo, pageInfo);
-        pageInfo.setList(convertList(dimensionDOPageInfo.getList(), modelService.getModelMap()));
+        pageInfo.setList(convertList(dimensionDOPageInfo.getList()));
         return pageInfo;
     }
 
@@ -211,13 +232,39 @@ public class DimensionServiceImpl implements DimensionService {
     }
 
     @Override
+    public List<DimensionResp> queryDimensions(DimensionsFilter dimensionsFilter) {
+        List<DimensionDO> dimensions = dimensionRepository.getDimensions(dimensionsFilter);
+        return convertList(dimensions);
+    }
+
+    @Override
     public List<DimensionResp> getDimensions(MetaFilter metaFilter) {
         DimensionFilter dimensionFilter = new DimensionFilter();
         BeanUtils.copyProperties(metaFilter, dimensionFilter);
         List<DimensionDO> dimensionDOS = dimensionRepository.getDimension(dimensionFilter);
-        List<DimensionResp> dimensionResps = convertList(dimensionDOS, modelService.getModelMap());
+        List<DimensionResp> dimensionResps = convertList(dimensionDOS);
+
+        List<Long> dimensionIds = dimensionResps.stream().map(dimensionResp -> dimensionResp.getId())
+                .collect(Collectors.toList());
+        List<TagItem> tagItems = tagMetaService.getTagItems(dimensionIds, TagDefineType.DIMENSION);
+        Map<Long, TagItem> itemIdToTagItem = tagItems.stream()
+                .collect(Collectors.toMap(tag -> tag.getItemId(), tag -> tag, (newTag, oldTag) -> newTag));
+
+        if (Objects.nonNull(itemIdToTagItem)) {
+            dimensionResps.stream().forEach(dimensionResp -> {
+                Long metricRespId = dimensionResp.getId();
+                if (itemIdToTagItem.containsKey(metricRespId)) {
+                    dimensionResp.setIsTag(itemIdToTagItem.get(metricRespId).getIsTag());
+                }
+            });
+        }
+
         if (!CollectionUtils.isEmpty(metaFilter.getFieldsDepend())) {
             return filterByField(dimensionResps, metaFilter.getFieldsDepend());
+        }
+        if (metaFilter.getDataSetId() != null) {
+            DataSetResp dataSetResp = dataSetService.getDataSet(metaFilter.getDataSetId());
+            return DimensionConverter.filterByDataSet(dimensionResps, dataSetResp);
         }
         return dimensionResps;
     }
@@ -253,16 +300,43 @@ public class DimensionServiceImpl implements DimensionService {
         return getDimensions(dimensionFilter);
     }
 
-    private List<DimensionResp> convertList(List<DimensionDO> dimensionDOS,
-                                            Map<Long, ModelResp> modelRespMap) {
+    private List<DimensionResp> convertList(List<DimensionDO> dimensionDOS) {
+        List<Long> modelIds = dimensionDOS.stream().map(DimensionDO::getModelId)
+                .collect(Collectors.toList());
+        ModelFilter modelFilter = new ModelFilter(false, modelIds);
+        Map<Long, ModelResp> modelMap = modelService.getModelMap(modelFilter);
         List<DimensionResp> dimensionResps = Lists.newArrayList();
         if (!CollectionUtils.isEmpty(dimensionDOS)) {
             dimensionResps = dimensionDOS.stream()
                     .map(dimensionDO -> DimensionConverter
-                            .convert2DimensionResp(dimensionDO, modelRespMap))
+                            .convert2DimensionResp(dimensionDO, modelMap))
                     .collect(Collectors.toList());
         }
+        fillTagInfo(dimensionResps);
         return dimensionResps;
+    }
+
+    private void fillTagInfo(List<DimensionResp> dimensionResps) {
+        if (CollectionUtils.isEmpty(dimensionResps)) {
+            return;
+        }
+        TagFilter tagFilter = new TagFilter();
+        tagFilter.setTagDefineType(TagDefineType.DIMENSION);
+        List<Long> dimensionIds = dimensionResps.stream().map(dimension -> dimension.getId())
+                .collect(Collectors.toList());
+        tagFilter.setItemIds(dimensionIds);
+        Map<Long, TagDO> keyAndTagMap = tagMetaService.getTagDOList(tagFilter).stream()
+                .collect(Collectors.toMap(tag -> tag.getItemId(), tag -> tag,
+                        (newTag, oldTag) -> newTag));
+        if (Objects.nonNull(keyAndTagMap)) {
+            dimensionResps.stream().forEach(dim -> {
+                if (keyAndTagMap.containsKey(dim.getId())) {
+                    dim.setIsTag(1);
+                } else {
+                    dim.setIsTag(0);
+                }
+            });
+        }
     }
 
     @Override
@@ -317,24 +391,18 @@ public class DimensionServiceImpl implements DimensionService {
         return dimValueMapsResp;
     }
 
-    private List<DimensionResp> getDimensionInSameDomain(Long modelId) {
-        ModelResp modelResp = modelService.getModel(modelId);
-        Long domainId = modelResp.getDomainId();
-        List<ModelResp> modelResps = modelService.getModelByDomainIds(Lists.newArrayList(domainId));
-        List<Long> modelIds = modelResps.stream().map(ModelResp::getId).collect(Collectors.toList());
-        return getDimensions(new MetaFilter(modelIds));
-    }
-
     private void checkExist(List<DimensionReq> dimensionReqs) {
         Long modelId = dimensionReqs.get(0).getModelId();
-        List<DimensionResp> dimensionResps = getDimensionInSameDomain(modelId);
+        List<DimensionResp> dimensionResps = getDimensions(modelId);
         Map<String, DimensionResp> bizNameMap = dimensionResps.stream()
                 .collect(Collectors.toMap(DimensionResp::getBizName, a -> a, (k1, k2) -> k1));
         Map<String, DimensionResp> nameMap = dimensionResps.stream()
                 .collect(Collectors.toMap(DimensionResp::getName, a -> a, (k1, k2) -> k1));
         for (DimensionReq dimensionReq : dimensionReqs) {
-            if (NameCheckUtils.containsSpecialCharacters(dimensionReq.getName())) {
-                throw new InvalidArgumentException("名称包含特殊字符, 请修改: " + dimensionReq.getName());
+            String forbiddenCharacters = NameCheckUtils.findForbiddenCharacters(dimensionReq.getName());
+            if (StringUtils.isNotBlank(forbiddenCharacters)) {
+                throw new InvalidArgumentException(String.format("名称包含特殊字符, 请修改: %s，特殊字符: %s",
+                        dimensionReq.getName(), forbiddenCharacters));
             }
             if (bizNameMap.containsKey(dimensionReq.getBizName())) {
                 DimensionResp dimensionResp = bizNameMap.get(dimensionReq.getBizName());
@@ -362,22 +430,27 @@ public class DimensionServiceImpl implements DimensionService {
     }
 
     private void sendEventBatch(List<DimensionDO> dimensionDOS, EventType eventType) {
-        List<DataItem> dataItems = dimensionDOS.stream().map(dimensionDO ->
-                        DataItem.builder().id(dimensionDO.getId()).name(dimensionDO.getName())
-                                .modelId(dimensionDO.getModelId()).type(TypeEnums.DIMENSION).build())
+        DataEvent dataEvent = getDataEvent(dimensionDOS, eventType);
+        eventPublisher.publishEvent(dataEvent);
+    }
+
+    public DataEvent getDataEvent() {
+        DimensionFilter dimensionFilter = new DimensionFilter();
+        List<DimensionDO> dimensionDOS = queryDimension(dimensionFilter);
+        return getDataEvent(dimensionDOS, EventType.ADD);
+    }
+
+    private DataEvent getDataEvent(List<DimensionDO> dimensionDOS, EventType eventType) {
+        List<DataItem> dataItems = dimensionDOS.stream()
+                .map(dimensionDO -> DataItem.builder().id(dimensionDO.getId() + Constants.UNDERLINE)
+                        .name(dimensionDO.getName()).modelId(dimensionDO.getModelId() + Constants.UNDERLINE)
+                        .type(TypeEnums.DIMENSION).build())
                 .collect(Collectors.toList());
-        eventPublisher.publishEvent(new DataEvent(this, dataItems, eventType));
+        return new DataEvent(this, dataItems, eventType);
     }
 
     private void sendEvent(DataItem dataItem, EventType eventType) {
         eventPublisher.publishEvent(new DataEvent(this,
                 Lists.newArrayList(dataItem), eventType));
     }
-
-    private DataItem getDataItem(DimensionDO dimensionDO) {
-        return DataItem.builder().id(dimensionDO.getId()).name(dimensionDO.getName())
-                .bizName(dimensionDO.getBizName())
-                .modelId(dimensionDO.getModelId()).type(TypeEnums.DIMENSION).build();
-    }
-
 }

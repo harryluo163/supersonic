@@ -8,7 +8,7 @@ import type { StateType } from '../../model';
 import SqlEditor from '@/components/SqlEditor';
 import { TransType } from '../../enum';
 import DimensionMetricVisibleTransfer from '../Entity/DimensionMetricVisibleTransfer';
-import { wrapperTransTypeAndId } from '../Entity/utils';
+import { wrapperTransTypeAndId } from '../../utils';
 import styles from '../style.less';
 
 type Props = {
@@ -32,7 +32,6 @@ const PermissionCreateDrawer: React.FC<Props> = ({
   const basicInfoFormRef = useRef<any>(null);
   const [selectedDimensionKeyList, setSelectedDimensionKeyList] = useState<string[]>([]);
   const [selectedMetricKeyList, setSelectedMetricKeyList] = useState<string[]>([]);
-
   const [selectedKeyList, setSelectedKeyList] = useState<string[]>([]);
 
   const saveAuth = async () => {

@@ -169,3 +169,142 @@ CREATE TABLE `s2_app`
 --20240115
 alter table s2_metric add column `define_type` varchar(50)  DEFAULT NULL; -- MEASURE, FIELD, METRIC
 update s2_metric set define_type = 'MEASURE';
+
+--20240129
+CREATE TABLE s2_view(
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    domain_id   BIGINT,
+    `name`      VARCHAR(255),
+    biz_name    VARCHAR(255),
+    `description` VARCHAR(255),
+    `status`      INT,
+    alias       VARCHAR(255),
+    view_detail text,
+    created_at  datetime,
+    created_by  VARCHAR(255),
+    updated_at  datetime,
+    updated_by  VARCHAR(255),
+    query_config VARCHAR(3000),
+    `admin` varchar(3000) DEFAULT NULL,
+    `admin_org` varchar(3000) DEFAULT NULL
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+alter table s2_plugin change column model `view` varchar(100);
+alter table s2_view_info rename to s2_canvas;
+
+alter table s2_query_stat_info add column `view_id` bigint(20) DEFAULT NULL after `model_id`;
+
+--20240301
+CREATE TABLE IF NOT EXISTS `s2_dictionary_conf` (
+   `id` INT NOT NULL AUTO_INCREMENT,
+   `description` varchar(255) ,
+   `type` varchar(255)  NOT NULL ,
+   `item_id` INT  NOT NULL ,
+   `config` text  ,
+   `status` varchar(255) NOT NULL ,
+   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP  ,
+   `created_by` varchar(100) NOT NULL ,
+   PRIMARY KEY (`id`)
+);
+COMMENT ON TABLE s2_dictionary_conf IS 'dictionary conf information table';
+
+CREATE TABLE IF NOT EXISTS `s2_dictionary_task` (
+   `id` INT NOT NULL AUTO_INCREMENT,
+   `name` varchar(255) NOT NULL ,
+   `description` varchar(255) ,
+   `type` varchar(255)  NOT NULL ,
+   `item_id` INT  NOT NULL ,
+   `config` text  ,
+   `status` varchar(255) NOT NULL ,
+   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP  ,
+   `created_by` varchar(100) NOT NULL ,
+   `elapsed_ms` bigINT DEFAULT NULL ,
+   PRIMARY KEY (`id`)
+);
+COMMENT ON TABLE s2_dictionary_task IS 'dictionary task information table';
+
+
+--20240229
+alter table s2_view rename to s2_data_set;
+alter table s2_query_stat_info change view_id data_set_id bigint;
+alter table s2_plugin change `view` data_set varchar(200);
+alter table s2_data_set change view_detail data_set_detail text;
+
+--20240311
+alter table s2_data_set add column query_type varchar(100) DEFAULT NULL;
+
+--20240319
+CREATE TABLE IF NOT EXISTS `s2_tag_object`
+(
+    `id`                bigint(20)   NOT NULL AUTO_INCREMENT,
+    `domain_id`         bigint(20)   DEFAULT NULL,
+    `name`              varchar(255) NOT NULL COMMENT '名称',
+    `biz_name`          varchar(255) NOT NULL COMMENT '英文名称',
+    `description`       varchar(500) DEFAULT NULL COMMENT '描述',
+    `status`            int(10) NOT NULL DEFAULT '1' COMMENT '状态',
+    `sensitive_level`   int(10) NOT NULL DEFAULT '0' COMMENT '敏感级别',
+    `created_at`        datetime     NOT NULL COMMENT '创建时间',
+    `created_by`        varchar(100) NOT NULL COMMENT '创建人',
+    `updated_at`        datetime      NULL COMMENT '更新时间',
+    `updated_by`        varchar(100)  NULL COMMENT '更新人',
+    `ext`               text DEFAULT NULL,
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB
+DEFAULT CHARSET = utf8 COMMENT ='标签表对象';
+
+alter table s2_model add column `tag_object_id` bigint(20) DEFAULT NULL after domain_id;
+
+CREATE TABLE IF NOT EXISTS s2_tag(
+                       `id` INT NOT NULL  AUTO_INCREMENT,
+                       `item_id` INT  NOT NULL ,
+                       `type` varchar(255)  NOT NULL ,
+                       `created_at` datetime NOT NULL ,
+                       `created_by` varchar(100) NOT NULL ,
+                       `updated_at` datetime DEFAULT NULL ,
+                       `updated_by` varchar(100) DEFAULT NULL ,
+                       `ext` text DEFAULT NULL  ,
+                       PRIMARY KEY (`id`)
+)ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--20240321
+CREATE TABLE IF NOT EXISTS `s2_query_rule` (
+    `id` INT NOT NULL  AUTO_INCREMENT,
+    `data_set_id` INT ,
+    `priority` INT  NOT NULL DEFAULT '1' ,
+    `rule_type` varchar(255)  NOT NULL ,
+    `name` varchar(255)  NOT NULL ,
+    `biz_name` varchar(255)  NOT NULL ,
+    `description` varchar(500) DEFAULT NULL ,
+    `rule` LONGVARCHAR DEFAULT NULL  ,
+    `action` LONGVARCHAR DEFAULT NULL  ,
+    `status` INT  NOT NULL DEFAULT '1' ,
+    `created_at` TIMESTAMP NOT NULL ,
+    `created_by` varchar(100) NOT NULL ,
+    `updated_at` TIMESTAMP DEFAULT NULL ,
+    `updated_by` varchar(100) DEFAULT NULL ,
+    `ext` LONGVARCHAR DEFAULT NULL  ,
+    PRIMARY KEY (`id`)
+    );
+COMMENT ON TABLE s2_query_rule IS 'tag query rule table';
+
+--20240325
+alter table s2_metric  change tags classifications varchar(500) null;
+alter table s2_metric  add column `is_publish` int(10) DEFAULT NULL COMMENT '是否发布';
+update s2_metric set is_publish = 1;
+
+--20240402
+alter table s2_dimension add column `ext` varchar(1000) DEFAULT NULL;
+
+--20240510
+CREATE TABLE IF NOT EXISTS `s2_term` (
+    `id` bigint(20) NOT NULL  AUTO_INCREMENT,
+    `domain_id` bigint(20),
+    `name` varchar(255)  NOT NULL ,
+    `description` varchar(500) DEFAULT NULL ,
+    `alias` varchar(1000)  NOT NULL ,
+    `created_at` datetime NOT NULL ,
+    `created_by` varchar(100) NOT NULL ,
+    `updated_at` datetime DEFAULT NULL ,
+    `updated_by` varchar(100) DEFAULT NULL ,
+    PRIMARY KEY (`id`)
+);

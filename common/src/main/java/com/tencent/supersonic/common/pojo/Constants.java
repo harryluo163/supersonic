@@ -11,9 +11,11 @@ public class Constants {
     public static final String AT_SYMBOL = "@";
     public static final String DOT = ".";
     public static String SPACE = " ";
+    public static String POUND = "#";
     public static final String COLON = ":";
     public static final String MINUS = "-";
     public static final String UNDERLINE = "_";
+    public static final String DICT_VALUE = "v";
     public static final String UNDERLINE_DOUBLE = "__";
     public static final String PARENTHESES_START = "(";
     public static final String PARENTHESES_END = ")";

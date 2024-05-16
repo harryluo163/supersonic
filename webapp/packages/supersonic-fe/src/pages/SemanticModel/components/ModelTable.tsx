@@ -1,14 +1,15 @@
-import type { ActionType, ProColumns } from '@ant-design/pro-table';
-import ProTable from '@ant-design/pro-table';
-import { message, Button, Space, Popconfirm, Input, Tag } from 'antd';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ProTable } from '@ant-design/pro-components';
+import { message, Button, Space, Popconfirm, Input } from 'antd';
 import React, { useRef, useState, useEffect } from 'react';
 import { StatusEnum } from '../enum';
 import type { Dispatch } from 'umi';
-import { connect } from 'umi';
+import { connect, history } from 'umi';
 import type { StateType } from '../model';
 import { deleteModel, updateModel } from '../service';
-import ClassDataSourceTypeModal from './ClassDataSourceTypeModal';
-
+import ClassModelTypeModal from './ClassModelTypeModal';
+import { ColumnsConfig } from './TableColumnRender';
+import TableHeaderFilter from './TableHeaderFilter';
 import moment from 'moment';
 import styles from './style.less';
 import { ISemantic } from '../data';
@@ -21,11 +22,64 @@ type Props = {
   domainManger: StateType;
 };
 
-const ModelTable: React.FC<Props> = ({ modelList, disabledEdit = false, onModelChange }) => {
+const ModelTable: React.FC<Props> = ({
+  modelList,
+  disabledEdit = false,
+  onModelChange,
+  dispatch,
+  domainManger,
+}) => {
+  const { selectDomainId, modelTableHistoryParams } = domainManger;
   const [modelItem, setModelItem] = useState<ISemantic.IModelItem>();
   const [saveLoading, setSaveLoading] = useState<boolean>(false);
+  const [filterParams, setFilterParams] = useState<Record<string, any>>({});
   const [createDataSourceModalOpen, setCreateDataSourceModalOpen] = useState(false);
+  const [currentPageNumber, setCurrentPageNumber] = useState<number>(1);
   const actionRef = useRef<ActionType>();
+
+  const [tableData, setTableData] = useState<ISemantic.IModelItem[]>([]);
+  const params = modelTableHistoryParams?.[selectDomainId];
+
+  useEffect(() => {
+    if (!Array.isArray(modelList)) {
+      return;
+    }
+    const { key } = filterParams;
+    getTableData(key);
+  }, [modelList, filterParams]);
+
+  useEffect(() => {
+    if (!params) {
+      return;
+    }
+    const { pageNumber, key } = params;
+    setFilterParams((preState) => {
+      return {
+        ...preState,
+        key,
+      };
+    });
+    setCurrentPageNumber(pageNumber);
+  }, []);
+
+  const dipatchParams = (params: Record<string, any>) => {
+    dispatch({
+      type: 'domainManger/setModelTableHistoryParams',
+      payload: {
+        [selectDomainId]: {
+          ...params,
+        },
+      },
+    });
+  };
+
+  const getTableData = (key: string) => {
+    if (key) {
+      setTableData(modelList.filter((item) => item.name.includes(key)));
+    } else {
+      setTableData(modelList);
+    }
+  };
 
   const updateModelStatus = async (modelData: ISemantic.IModelItem) => {
     setSaveLoading(true);
@@ -39,6 +93,8 @@ const ModelTable: React.FC<Props> = ({ modelList, disabledEdit = false, onModelC
       message.error(msg);
     }
   };
+
+  const columnsConfig = ColumnsConfig();
 
   const columns: ProColumns[] = [
     {
@@ -67,14 +123,6 @@ const ModelTable: React.FC<Props> = ({ modelList, disabledEdit = false, onModelC
       dataIndex: 'key',
       title: '模型搜索',
       hideInTable: true,
-      renderFormItem: () => <Input placeholder="请输入ID/模型名称/英文名称/标签" />,
-    },
-    {
-      dataIndex: 'alias',
-      title: '别名',
-      width: 150,
-      ellipsis: true,
-      search: false,
     },
     {
       dataIndex: 'bizName',
@@ -85,20 +133,7 @@ const ModelTable: React.FC<Props> = ({ modelList, disabledEdit = false, onModelC
       dataIndex: 'status',
       title: '状态',
       search: false,
-      render: (status) => {
-        switch (status) {
-          case StatusEnum.ONLINE:
-            return <Tag color="success">已启用</Tag>;
-          case StatusEnum.OFFLINE:
-            return <Tag color="warning">未启用</Tag>;
-          case StatusEnum.INITIALIZED:
-            return <Tag color="processing">初始化</Tag>;
-          case StatusEnum.DELETED:
-            return <Tag color="default">已删除</Tag>;
-          default:
-            return <Tag color="default">未知</Tag>;
-        }
-      },
+      render: columnsConfig.state.render,
     },
     {
       dataIndex: 'createdBy',
@@ -194,10 +229,50 @@ const ModelTable: React.FC<Props> = ({ modelList, disabledEdit = false, onModelC
         rowKey="id"
         search={false}
         columns={columns}
-        dataSource={modelList}
+        dataSource={tableData}
         tableAlertRender={() => {
           return false;
         }}
+        pagination={{
+          current: currentPageNumber,
+          onChange: (pageNumber) => {
+            setCurrentPageNumber(pageNumber);
+            dipatchParams({
+              ...filterParams,
+              pageNumber: `${pageNumber}`,
+            });
+          },
+        }}
+        headerTitle={
+          <TableHeaderFilter
+            components={[
+              {
+                label: '模型搜索',
+                component: (
+                  <Input.Search
+                    style={{ width: 280 }}
+                    placeholder="请输入模型名称"
+                    defaultValue={params?.key}
+                    onSearch={(value) => {
+                      setCurrentPageNumber(1);
+                      dipatchParams({
+                        ...filterParams,
+                        key: value,
+                        pageNumber: `1`,
+                      });
+                      setFilterParams((preState) => {
+                        return {
+                          ...preState,
+                          key: value,
+                        };
+                      });
+                    }}
+                  />
+                ),
+              },
+            ]}
+          />
+        }
         size="small"
         options={{ reload: false, density: false, fullScreen: false }}
         toolBarRender={() =>
@@ -218,9 +293,9 @@ const ModelTable: React.FC<Props> = ({ modelList, disabledEdit = false, onModelC
         }
       />
       {createDataSourceModalOpen && (
-        <ClassDataSourceTypeModal
+        <ClassModelTypeModal
           open={createDataSourceModalOpen}
-          dataSourceItem={modelItem}
+          modelItem={modelItem}
           onSubmit={() => {
             onModelChange?.();
             setCreateDataSourceModalOpen(false);

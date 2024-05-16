@@ -114,7 +114,7 @@ const DomainListTree: FC<DomainListProps> = ({
   };
 
   const titleRender = (node: any) => {
-    const { id, name, path, hasEditPermission } = node as any;
+    const { id, name, path, hasEditPermission, parentId, hasModel } = node as any;
     return (
       <div className={styles.projectItem}>
         <span
@@ -126,8 +126,8 @@ const DomainListTree: FC<DomainListProps> = ({
           {name}
         </span>
         {createDomainBtnVisible && hasEditPermission && (
-          <span className={styles.operation}>
-            {Array.isArray(path) && path.length < 2 && (
+          <span className={`${styles.operation} ${parentId ? styles.rowHover : ''}`}>
+            {Array.isArray(path) && path.length < 2 && !hasModel && (
               <PlusOutlined
                 className={styles.icon}
                 onClick={() => {
@@ -179,7 +179,7 @@ const DomainListTree: FC<DomainListProps> = ({
   return (
     <div className={styles.domainList}>
       <div className={styles.searchContainer}>
-        <Row style={{ gap: 20 }}>
+        <Row style={{ gap: 10 }}>
           <Col flex="1 1 215px">
             <Search
               allowClear

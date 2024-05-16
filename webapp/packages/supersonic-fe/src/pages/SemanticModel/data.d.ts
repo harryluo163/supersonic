@@ -1,5 +1,6 @@
 import { TreeGraphData } from '@antv/g6-core';
 import { StatusEnum } from './enum';
+import { SENSITIVE_LEVEL, TAG_DEFINE_TYPE, METRIC_DEFINE_TYPE } from './constant';
 
 export type ISODateString =
   `${number}-${number}-${number}T${number}:${number}:${number}.${number}+${number}:${number}`;
@@ -22,6 +23,7 @@ export declare namespace IDataSource {
     authorized?: boolean;
     dataFormatType?: string;
     dataFormat?: string;
+    comment?: string;
   }
 
   interface IIdentifiersItem {
@@ -57,6 +59,17 @@ export declare namespace IDataSource {
     dataType: string;
     fieldName: string;
   }
+
+  type ISqlParamsValueType = 'STRING' | 'EXPR' | 'NUMBER';
+  interface ISqlParamsItem {
+    index?: number;
+    defaultValues: (boolean | string | number)[];
+    name: string;
+    // type: string;
+    valueType: ISqlParamsValueType;
+    udf?: boolean;
+  }
+
   interface IDataSourceDetail {
     queryType: string;
     sqlQuery: string;
@@ -65,6 +78,7 @@ export declare namespace IDataSource {
     fields: IDataSourceDetailFieldsItem[];
     dimensions: IDimensionsItem[];
     measures: IMeasuresItem[];
+    sqlVariables: ISqlParamsItem[];
   }
 
   interface IDataSourceItem {
@@ -96,11 +110,13 @@ export declare namespace ISemantic {
     name: string;
     bizName: string;
     description: any;
+    children: IDomainItem[];
     hasEditPermission: boolean;
     status?: number;
     typeEnum?: any;
     sensitiveLevel?: number;
     parentId: number;
+    hasModel: boolean;
     fullPath?: string;
     viewers?: any[];
     viewOrgs?: any[];
@@ -132,11 +148,38 @@ export declare namespace ISemantic {
     viewOrgs?: any[];
     admins?: string[];
     adminOrgs?: any[];
+    tagObjectId?: number;
     drillDownDimensions: IDrillDownDimensionItem[];
     createdBy: UserName;
     updatedBy: UserName;
     createdAt: ISODateString;
     updatedAt: ISODateString;
+  }
+
+  interface IViewModelConfigItem {
+    id: number;
+    includesAll: boolean;
+    metrics: number[];
+    dimensions: number[];
+    tagIds: number[];
+  }
+
+  interface IViewItem {
+    createdBy: UserName;
+    updatedBy: UserName;
+    createdAt: ISODateString;
+    updatedAt: ISODateString;
+    id: number;
+    name: string;
+    bizName: string;
+    description: string;
+    status?: StatusEnum;
+    typeEnum?: any;
+    sensitiveLevel: number;
+    domainId: number;
+    dataSetDetail: {
+      dataSetModelConfigs: IViewModelConfigItem[];
+    };
   }
 
   interface IDimensionItem {
@@ -193,6 +236,11 @@ export declare namespace ISemantic {
     bizName: string;
   }
 
+  interface IDimensionTypeParamsItem {
+    id: number;
+    bizName: string;
+  }
+
   interface IMeasureTypeParams {
     measures: IMeasure[];
     expr: string;
@@ -209,6 +257,7 @@ export declare namespace ISemantic {
 
   interface IDrillDownDimensionItem {
     dimensionId: number;
+    inheritedFromModel?: boolean;
     necessary?: boolean;
   }
 
@@ -227,15 +276,17 @@ export declare namespace ISemantic {
     description: string;
     status: StatusEnum;
     typeEnum: string;
-    sensitiveLevel: number;
+    sensitiveLevel: SENSITIVE_LEVEL;
     domainId: number;
     domainName: string;
     modelName: string;
     modelId: number;
+    modelBizName: string;
     hasAdminRes: boolean;
     type: string;
-    tags: string[];
+    classifications: string[];
     // typeParams: IMeasureTypeParams;
+    metricDefineType: METRIC_DEFINE_TYPE;
     metricDefineByMeasureParams: IMeasureTypeParams;
     metricDefineByFieldParams: IFieldTypeParams;
     metricDefineByMetricParams: IMetricTypeParams;
@@ -245,6 +296,7 @@ export declare namespace ISemantic {
     alias: string;
     useCnt: number;
     isCollect: boolean;
+    isPublish: boolean;
     relateDimension?: IRelateDimension;
   }
 
@@ -304,6 +356,90 @@ export declare namespace ISemantic {
     description?: string;
   }
   type IDatabaseItemList = IDatabaseItem[];
+
+  interface IDictKnowledgeConfigItemConfig {
+    metricId?: number;
+    blackList: string[];
+    whiteList: string[];
+    ruleList: any[];
+    limit?: number;
+  }
+  interface IDictKnowledgeConfigItem {
+    id: number;
+    modelId: number;
+    bizName: string;
+    type: string;
+    itemId: number;
+    config: IDictKnowledgeConfigItemConfig;
+    status: string;
+    nature?: string;
+  }
+
+  interface IDictKnowledgeTaskItem {
+    id: number;
+    modelId: number;
+    bizName: string;
+    type: string;
+    itemId: number;
+    config: IDictKnowledgeConfigItemConfig;
+    status: string | null;
+    name: string;
+    description: string | null;
+    taskStatus: string;
+    createdAt: string;
+    createdBy: string;
+    elapsedMs: number | null;
+    nature: string;
+  }
+
+  interface ITagDefineParams {
+    expr: string;
+    dependencies: (number | string)[];
+  }
+  interface ITagItem {
+    createdBy: string;
+    updatedBy: string;
+    createdAt: string;
+    updatedAt: string;
+    id: number;
+    name: string;
+    modelName: string;
+    bizName: string;
+    description: string;
+    status: number;
+    typeEnum: null;
+    sensitiveLevel: SENSITIVE_LEVEL;
+    modelId: number;
+    type: string;
+    isCollect: boolean;
+    hasAdminRes: boolean;
+    ext: any;
+    tagDefineType: TAG_DEFINE_TYPE;
+    tagDefineParams: ITagDefineParams;
+    expr: string;
+  }
+
+  interface ITagObjectItem {
+    createdBy: string;
+    updatedBy: string;
+    createdAt: string;
+    updatedAt: string;
+    id: number;
+    name: string;
+    bizName: string;
+    description: string;
+    status: number;
+    typeEnum: null;
+    sensitiveLevel: SENSITIVE_LEVEL;
+    domainId: number;
+    ext: null;
+  }
+
+  interface ITermItem {
+    name: string;
+    description: string;
+    similarTerms: string[];
+  }
 }
 
 export declare namespace IChatConfig {
@@ -317,21 +453,6 @@ export declare namespace IChatConfig {
       dimensionList: ISemantic.IDimensionList;
       metricList: ISemantic.IMetricList;
     };
-  }
-
-  interface IConfig {
-    id: any;
-    modelId: number;
-    modelName: string;
-    chatAggRichConfig: IChatRichConfig;
-    chatDetailRichConfig: IChatRichConfig;
-    recommendedQuestions: { question: string }[];
-    bizName: string;
-    statusEnum: string;
-    createdBy: string;
-    updatedBy: string;
-    createdAt: string;
-    updatedAt: string;
   }
 
   interface IKnowledgeInfosItem {

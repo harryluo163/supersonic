@@ -4,11 +4,6 @@ package com.tencent.supersonic.headless.core.parser.calcite.schema;
 import com.tencent.supersonic.headless.api.pojo.enums.EngineType;
 import com.tencent.supersonic.headless.core.parser.calcite.Configuration;
 import com.tencent.supersonic.headless.core.parser.calcite.sql.S2SQLSqlValidatorImpl;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.prepare.CalciteCatalogReader;
 import org.apache.calcite.prepare.Prepare;
@@ -18,6 +13,12 @@ import org.apache.calcite.schema.impl.AbstractSchema;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.ParameterScope;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 public class SchemaBuilder {
 
@@ -30,10 +31,10 @@ public class SchemaBuilder {
     public static SqlValidatorScope getScope(SemanticSchema schema) throws Exception {
         Map<String, RelDataType> nameToTypeMap = new HashMap<>();
         CalciteSchema rootSchema = CalciteSchema.createRootSchema(true, false);
-        rootSchema.add(schema.getRootPath(), schema);
+        rootSchema.add(schema.getSchemaKey(), schema);
         Prepare.CatalogReader catalogReader = new CalciteCatalogReader(
                 rootSchema,
-                Collections.singletonList(schema.getRootPath()),
+                Collections.singletonList(schema.getSchemaKey()),
                 Configuration.typeFactory,
                 Configuration.config
         );
@@ -52,16 +53,16 @@ public class SchemaBuilder {
                 .withRowCount(1)
                 .build();
         schema.add(MATERIALIZATION_SYS_SOURCE, srcTable);
-        DataSourceTable viewTable = DataSourceTable.newBuilder(MATERIALIZATION_SYS_VIEW)
+        DataSourceTable dataSetTable = DataSourceTable.newBuilder(MATERIALIZATION_SYS_VIEW)
                 .addField(MATERIALIZATION_SYS_FIELD_DATE, SqlTypeName.DATE)
                 .addField(MATERIALIZATION_SYS_FIELD_DATA, SqlTypeName.BIGINT)
                 .withRowCount(1)
                 .build();
-        schema.add(MATERIALIZATION_SYS_VIEW, viewTable);
+        schema.add(MATERIALIZATION_SYS_VIEW, dataSetTable);
         return rootSchema;
     }
 
-    public static void addSourceView(CalciteSchema viewSchema, String dbSrc, String tbSrc, Set<String> dates,
+    public static void addSourceView(CalciteSchema dataSetSchema, String dbSrc, String tbSrc, Set<String> dates,
             Set<String> dimensions, Set<String> metrics) {
         String tb = tbSrc.toLowerCase();
         String db = dbSrc.toLowerCase();
@@ -79,14 +80,14 @@ public class SchemaBuilder {
                 .withRowCount(1)
                 .build();
         if (Objects.nonNull(db) && !db.isEmpty()) {
-            SchemaPlus schemaPlus = viewSchema.plus().getSubSchema(db);
+            SchemaPlus schemaPlus = dataSetSchema.plus().getSubSchema(db);
             if (Objects.isNull(schemaPlus)) {
-                viewSchema.plus().add(db, new AbstractSchema());
-                schemaPlus = viewSchema.plus().getSubSchema(db);
+                dataSetSchema.plus().add(db, new AbstractSchema());
+                schemaPlus = dataSetSchema.plus().getSubSchema(db);
             }
             schemaPlus.add(tb, srcTable);
         } else {
-            viewSchema.add(tb, srcTable);
+            dataSetSchema.add(tb, srcTable);
         }
     }
 }

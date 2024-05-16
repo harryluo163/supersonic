@@ -4,7 +4,6 @@ import com.google.common.collect.Lists;
 import com.tencent.supersonic.auth.api.authentication.pojo.User;
 import com.tencent.supersonic.auth.api.authentication.service.UserService;
 import com.tencent.supersonic.common.pojo.ItemDateResp;
-import com.tencent.supersonic.common.pojo.ModelRela;
 import com.tencent.supersonic.common.pojo.enums.AuthType;
 import com.tencent.supersonic.common.pojo.enums.EventType;
 import com.tencent.supersonic.common.pojo.enums.StatusEnum;
@@ -14,29 +13,19 @@ import com.tencent.supersonic.headless.api.pojo.Dim;
 import com.tencent.supersonic.headless.api.pojo.Identify;
 import com.tencent.supersonic.headless.api.pojo.ItemDateFilter;
 import com.tencent.supersonic.headless.api.pojo.Measure;
-import com.tencent.supersonic.headless.api.pojo.RelateDimension;
 import com.tencent.supersonic.headless.api.pojo.request.DateInfoReq;
 import com.tencent.supersonic.headless.api.pojo.request.DimensionReq;
 import com.tencent.supersonic.headless.api.pojo.request.FieldRemovedReq;
 import com.tencent.supersonic.headless.api.pojo.request.MetaBatchReq;
 import com.tencent.supersonic.headless.api.pojo.request.MetricReq;
 import com.tencent.supersonic.headless.api.pojo.request.ModelReq;
-import com.tencent.supersonic.headless.api.pojo.request.ModelSchemaFilterReq;
 import com.tencent.supersonic.headless.api.pojo.response.DatabaseResp;
-import com.tencent.supersonic.headless.api.pojo.response.DimSchemaResp;
 import com.tencent.supersonic.headless.api.pojo.response.DimensionResp;
 import com.tencent.supersonic.headless.api.pojo.response.DomainResp;
 import com.tencent.supersonic.headless.api.pojo.response.MetricResp;
-import com.tencent.supersonic.headless.api.pojo.response.MetricSchemaResp;
 import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
-import com.tencent.supersonic.headless.api.pojo.response.ModelSchemaResp;
 import com.tencent.supersonic.headless.api.pojo.response.UnAvailableItemResp;
-import com.tencent.supersonic.headless.server.manager.DimensionYamlManager;
-import com.tencent.supersonic.headless.server.manager.MetricYamlManager;
-import com.tencent.supersonic.headless.server.manager.ModelYamlManager;
-import com.tencent.supersonic.headless.server.pojo.yaml.DataModelYamlTpl;
-import com.tencent.supersonic.headless.server.pojo.yaml.DimensionYamlTpl;
-import com.tencent.supersonic.headless.server.pojo.yaml.MetricYamlTpl;
+import com.tencent.supersonic.headless.api.pojo.response.DataSetResp;
 import com.tencent.supersonic.headless.server.persistence.dataobject.DateInfoDO;
 import com.tencent.supersonic.headless.server.persistence.dataobject.ModelDO;
 import com.tencent.supersonic.headless.server.persistence.repository.DateInfoRepository;
@@ -47,8 +36,8 @@ import com.tencent.supersonic.headless.server.service.DatabaseService;
 import com.tencent.supersonic.headless.server.service.DimensionService;
 import com.tencent.supersonic.headless.server.service.DomainService;
 import com.tencent.supersonic.headless.server.service.MetricService;
-import com.tencent.supersonic.headless.server.service.ModelRelaService;
 import com.tencent.supersonic.headless.server.service.ModelService;
+import com.tencent.supersonic.headless.server.service.DataSetService;
 import com.tencent.supersonic.headless.server.utils.ModelConverter;
 import com.tencent.supersonic.headless.server.utils.NameCheckUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -67,7 +56,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -86,9 +74,9 @@ public class ModelServiceImpl implements ModelService {
 
     private DomainService domainService;
 
-    private ModelRelaService modelRelaService;
-
     private UserService userService;
+
+    private DataSetService dataSetService;
 
     private DateInfoRepository dateInfoRepository;
 
@@ -96,17 +84,17 @@ public class ModelServiceImpl implements ModelService {
                             DatabaseService databaseService,
                             @Lazy DimensionService dimensionService,
                             @Lazy MetricService metricService,
-                            ModelRelaService modelRelaService,
                             DomainService domainService,
                             UserService userService,
+                            DataSetService dataSetService,
                             DateInfoRepository dateInfoRepository) {
         this.modelRepository = modelRepository;
         this.databaseService = databaseService;
         this.dimensionService = dimensionService;
         this.metricService = metricService;
         this.domainService = domainService;
-        this.modelRelaService = modelRelaService;
         this.userService = userService;
+        this.dataSetService = dataSetService;
         this.dateInfoRepository = dateInfoRepository;
     }
 
@@ -153,14 +141,22 @@ public class ModelServiceImpl implements ModelService {
     }
 
     @Override
-    public List<ModelResp> getModelList(ModelFilter modelFilter) {
-        return ModelConverter.convertList(modelRepository.getModelList(modelFilter));
+    public List<ModelResp> getModelList(MetaFilter metaFilter) {
+        ModelFilter modelFilter = new ModelFilter();
+        BeanUtils.copyProperties(metaFilter, modelFilter);
+        List<ModelResp> modelResps = ModelConverter.convertList(modelRepository.getModelList(modelFilter));
+        if (modelFilter.getDataSetId() != null) {
+            DataSetResp dataSetResp = dataSetService.getDataSet(modelFilter.getDataSetId());
+            return modelResps.stream().filter(modelResp -> dataSetResp.getAllModels().contains(modelResp.getId()))
+                    .collect(Collectors.toList());
+        }
+        return modelResps;
     }
 
     @Override
-    public Map<Long, ModelResp> getModelMap() {
+    public Map<Long, ModelResp> getModelMap(ModelFilter modelFilter) {
         Map<Long, ModelResp> map = new HashMap<>();
-        List<ModelResp> modelResps = getModelList(new ModelFilter());
+        List<ModelResp> modelResps = getModelList(modelFilter);
         if (CollectionUtils.isEmpty(modelResps)) {
             return map;
         }
@@ -199,6 +195,9 @@ public class ModelServiceImpl implements ModelService {
 
     @Override
     public UnAvailableItemResp getUnAvailableItem(FieldRemovedReq fieldRemovedReq) {
+        if (CollectionUtils.isEmpty(fieldRemovedReq.getFields())) {
+            return UnAvailableItemResp.builder().build();
+        }
         MetaFilter metaFilter = new MetaFilter(Lists.newArrayList(fieldRemovedReq.getModelId()));
         metaFilter.setFieldsDepend(fieldRemovedReq.getFields());
         List<MetricResp> metricResps = metricService.getMetrics(metaFilter);
@@ -218,8 +217,9 @@ public class ModelServiceImpl implements ModelService {
     }
 
     private void checkName(ModelReq modelReq) {
-        if (NameCheckUtils.containsSpecialCharacters(modelReq.getName())) {
-            String message = String.format("模型名称[%s]包含特殊字符, 请修改", modelReq.getName());
+        String forbiddenCharacters = NameCheckUtils.findForbiddenCharacters(modelReq.getName());
+        if (StringUtils.isNotBlank(forbiddenCharacters)) {
+            String message = String.format("模型名称[%s]包含特殊字符(%s), 请修改", modelReq.getName(), forbiddenCharacters);
             throw new InvalidArgumentException(message);
         }
         List<Dim> dims = modelReq.getModelDetail().getDimensions();
@@ -233,23 +233,27 @@ public class ModelServiceImpl implements ModelService {
             throw new InvalidArgumentException("有度量时, 不可缺少时间维度");
         }
         for (Measure measure : measures) {
+            String measureForbiddenCharacters = NameCheckUtils.findForbiddenCharacters(measure.getName());
             if (StringUtils.isNotBlank(measure.getName())
-                    && NameCheckUtils.containsSpecialCharacters(measure.getName())) {
-                String message = String.format("度量[%s]包含特殊字符, 请修改", measure.getName());
+                    && StringUtils.isNotBlank(measureForbiddenCharacters)) {
+                String message = String.format("度量[%s]包含特殊字符(%s), 请修改", measure.getName(), measureForbiddenCharacters);
                 throw new InvalidArgumentException(message);
             }
         }
         for (Dim dim : dims) {
+            String dimForbiddenCharacters = NameCheckUtils.findForbiddenCharacters(dim.getName());
             if (StringUtils.isNotBlank(dim.getName())
-                    && NameCheckUtils.containsSpecialCharacters(dim.getName())) {
-                String message = String.format("维度[%s]包含特殊字符, 请修改", dim.getName());
+                    && StringUtils.isNotBlank(dimForbiddenCharacters)) {
+                String message = String.format("维度[%s]包含特殊字符(%s), 请修改", dim.getName(), dimForbiddenCharacters);
                 throw new InvalidArgumentException(message);
             }
         }
         for (Identify identify : identifies) {
+            String identifyForbiddenCharacters = NameCheckUtils.findForbiddenCharacters(identify.getName());
             if (StringUtils.isNotBlank(identify.getName())
-                    && NameCheckUtils.containsSpecialCharacters(identify.getName())) {
-                String message = String.format("主键/外键[%s]包含特殊字符, 请修改", identify.getName());
+                    && StringUtils.isNotBlank(identifyForbiddenCharacters)) {
+                String message = String.format("主键/外键[%s]包含特殊字符(%s), 请修改", identify.getName(),
+                        identifyForbiddenCharacters);
                 throw new InvalidArgumentException(message);
             }
         }
@@ -295,32 +299,40 @@ public class ModelServiceImpl implements ModelService {
 
     @Override
     public List<ModelResp> getModelListWithAuth(User user, Long domainId, AuthType authType) {
-        List<ModelResp> modelResps = getModelAuthList(user, authType);
+        List<ModelResp> modelResps = getModelAuthList(user, domainId, authType);
         Set<ModelResp> modelRespSet = new HashSet<>(modelResps);
-        List<ModelResp> modelRespsAuthInheritDomain = getModelRespAuthInheritDomain(user, authType);
+        List<ModelResp> modelRespsAuthInheritDomain = getModelRespAuthInheritDomain(user, domainId, authType);
         modelRespSet.addAll(modelRespsAuthInheritDomain);
-        if (domainId != null && domainId > 0) {
-            modelRespSet = modelRespSet.stream().filter(modelResp ->
-                    modelResp.getDomainId().equals(domainId)).collect(Collectors.toSet());
-        }
         return modelRespSet.stream().sorted(Comparator.comparingLong(ModelResp::getId))
                 .collect(Collectors.toList());
     }
 
-    public List<ModelResp> getModelRespAuthInheritDomain(User user, AuthType authType) {
-        Set<DomainResp> domainResps = domainService.getDomainAuthSet(user, authType);
-        if (CollectionUtils.isEmpty(domainResps)) {
+    public List<ModelResp> getModelRespAuthInheritDomain(User user, Long domainId, AuthType authType) {
+        List<Long> domainIds = domainService.getDomainAuthSet(user, authType)
+                .stream().map(DomainResp::getId)
+                .collect(Collectors.toList());
+        if (CollectionUtils.isEmpty(domainIds)) {
             return Lists.newArrayList();
         }
-        List<ModelResp> allModelList = getModelList(new ModelFilter());
-        Set<Long> domainIds = domainResps.stream().map(DomainResp::getId).collect(Collectors.toSet());
-        return allModelList.stream().filter(modelResp ->
-                domainIds.contains(modelResp.getDomainId())).collect(Collectors.toList());
+        if (domainId != null) {
+            if (domainIds.contains(domainId)) {
+                domainIds = Lists.newArrayList(domainId);
+            } else {
+                return Lists.newArrayList();
+            }
+        }
+        ModelFilter modelFilter = new ModelFilter();
+        modelFilter.setIncludesDetail(false);
+        modelFilter.setDomainIds(domainIds);
+        return getModelList(modelFilter);
     }
 
     @Override
-    public List<ModelResp> getModelAuthList(User user, AuthType authTypeEnum) {
-        List<ModelResp> modelResps = getModelList(new ModelFilter());
+    public List<ModelResp> getModelAuthList(User user, Long domainId, AuthType authTypeEnum) {
+        ModelFilter modelFilter = new ModelFilter();
+        modelFilter.setIncludesDetail(false);
+        modelFilter.setDomainId(domainId);
+        List<ModelResp> modelResps = getModelList(modelFilter);
         Set<String> orgIds = userService.getUserAllOrgId(user.getName());
         List<ModelResp> modelWithAuth = Lists.newArrayList();
         if (authTypeEnum.equals(AuthType.ADMIN)) {
@@ -330,7 +342,7 @@ public class ModelServiceImpl implements ModelService {
         }
         if (authTypeEnum.equals(AuthType.VISIBLE)) {
             modelWithAuth = modelResps.stream()
-                    .filter(domainResp -> checkViewerPermission(orgIds, user, domainResp))
+                    .filter(domainResp -> checkDataSeterPermission(orgIds, user, domainResp))
                     .collect(Collectors.toList());
         }
         return modelWithAuth;
@@ -343,12 +355,20 @@ public class ModelServiceImpl implements ModelService {
         }
         ModelFilter modelFilter = new ModelFilter();
         modelFilter.setDomainIds(domainIds);
+        modelFilter.setIncludesDetail(false);
         List<ModelResp> modelResps = getModelList(modelFilter);
         if (CollectionUtils.isEmpty(modelResps)) {
             return modelResps;
         }
         return modelResps.stream().filter(modelResp ->
                 domainIds.contains(modelResp.getDomainId())).collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ModelResp> getAllModelByDomainIds(List<Long> domainIds) {
+        Set<DomainResp> domainResps = domainService.getDomainChildren(domainIds);
+        List<Long> allDomainIds = domainResps.stream().map(DomainResp::getId).collect(Collectors.toList());
+        return getModelByDomainIds(allDomainIds);
     }
 
     @Override
@@ -381,52 +401,6 @@ public class ModelServiceImpl implements ModelService {
             domainResp = domainService.getDomain(domainId);
         }
         return Lists.newArrayList();
-    }
-
-    @Override
-    public ModelSchemaResp fetchSingleModelSchema(Long modelId) {
-        ModelResp modelResp = getModel(modelId);
-        ModelSchemaResp modelSchemaResp = new ModelSchemaResp();
-        BeanUtils.copyProperties(modelResp, modelSchemaResp);
-        modelSchemaResp.setDimensions(generateDimSchema(modelId));
-        modelSchemaResp.setMetrics(generateMetricSchema(modelId, modelResp));
-        return modelSchemaResp;
-    }
-
-    @Override
-    public List<ModelSchemaResp> fetchModelSchema(ModelSchemaFilterReq modelSchemaFilterReq) {
-        List<ModelSchemaResp> modelSchemaRespList = new ArrayList<>();
-        List<Long> modelIds = modelSchemaFilterReq.getModelIds();
-        if (CollectionUtils.isEmpty(modelIds)) {
-            modelIds = generateModelIdsReq(modelSchemaFilterReq);
-        }
-        MetaFilter metaFilter = new MetaFilter(modelIds);
-        metaFilter.setStatus(StatusEnum.ONLINE.getCode());
-        Map<Long, List<MetricResp>> metricRespMap = metricService.getMetrics(metaFilter)
-                .stream().collect(Collectors.groupingBy(MetricResp::getModelId));
-        Map<Long, List<DimensionResp>> dimensionRespsMap = dimensionService.getDimensions(metaFilter)
-                .stream().collect(Collectors.groupingBy(DimensionResp::getModelId));
-        List<ModelRela> modelRelas = modelRelaService.getModelRela(modelIds);
-        for (Long modelId : modelIds) {
-            ModelResp modelResp = getModelMap().get(modelId);
-            if (modelResp == null || !StatusEnum.ONLINE.getCode().equals(modelResp.getStatus())) {
-                continue;
-            }
-            List<MetricResp> metricResps = metricRespMap.getOrDefault(modelId, Lists.newArrayList());
-            List<MetricSchemaResp> metricSchemaResps = metricResps.stream().map(metricResp ->
-                    convert(metricResp, modelResp)).collect(Collectors.toList());
-            List<DimSchemaResp> dimensionResps = dimensionRespsMap.getOrDefault(modelId, Lists.newArrayList())
-                    .stream().map(this::convert).collect(Collectors.toList());
-            ModelSchemaResp modelSchemaResp = new ModelSchemaResp();
-            BeanUtils.copyProperties(modelResp, modelSchemaResp);
-            modelSchemaResp.setDimensions(dimensionResps);
-            modelSchemaResp.setMetrics(metricSchemaResps);
-            modelSchemaResp.setModelRelas(modelRelas.stream().filter(modelRela
-                    -> modelRela.getFromModelId().equals(modelId) || modelRela.getToModelId().equals(modelId))
-                    .collect(Collectors.toList()));
-            modelSchemaRespList.add(modelSchemaResp);
-        }
-        return modelSchemaRespList;
     }
 
     @Override
@@ -464,37 +438,6 @@ public class ModelServiceImpl implements ModelService {
         return modelRepository.getModelById(id);
     }
 
-    private List<MetricSchemaResp> generateMetricSchema(Long modelId, ModelResp modelResp) {
-        List<MetricSchemaResp> metricSchemaDescList = new ArrayList<>();
-        List<MetricResp> metricResps = metricService.getMetrics(new MetaFilter(Lists.newArrayList(modelId)));
-        metricResps.forEach(metricResp -> metricSchemaDescList.add(convert(metricResp, modelResp)));
-        return metricSchemaDescList;
-    }
-
-    private List<DimSchemaResp> generateDimSchema(Long modelId) {
-        List<DimensionResp> dimDescList = dimensionService.getDimensions(new MetaFilter(Lists.newArrayList(modelId)));
-        return dimDescList.stream().map(this::convert).collect(Collectors.toList());
-    }
-
-    private DimSchemaResp convert(DimensionResp dimensionResp) {
-        DimSchemaResp dimSchemaResp = new DimSchemaResp();
-        BeanUtils.copyProperties(dimensionResp, dimSchemaResp);
-        dimSchemaResp.setUseCnt(0L);
-        return dimSchemaResp;
-    }
-
-    private MetricSchemaResp convert(MetricResp metricResp, ModelResp modelResp) {
-        MetricSchemaResp metricSchemaResp = new MetricSchemaResp();
-        BeanUtils.copyProperties(metricResp, metricSchemaResp);
-        RelateDimension relateDimension = metricResp.getRelateDimension();
-        if (relateDimension == null || CollectionUtils.isEmpty(relateDimension.getDrillDownDimensions())) {
-            metricSchemaResp.setRelateDimension(RelateDimension.builder()
-                    .drillDownDimensions(modelResp.getDrillDownDimensions()).build());
-        }
-        metricSchemaResp.setUseCnt(0L);
-        return metricSchemaResp;
-    }
-
     private List<DateInfoReq> convert(List<DateInfoDO> dateInfoDOList) {
         List<DateInfoReq> dateInfoCommendList = new ArrayList<>();
         dateInfoDOList.forEach(dateInfoDO -> {
@@ -504,13 +447,6 @@ public class ModelServiceImpl implements ModelService {
             dateInfoCommendList.add(dateInfoCommend);
         });
         return dateInfoCommendList;
-    }
-
-    private List<Long> generateModelIdsReq(ModelSchemaFilterReq filter) {
-        if (Objects.nonNull(filter) && !CollectionUtils.isEmpty(filter.getModelIds())) {
-            return filter.getModelIds();
-        }
-        return new ArrayList<>(getModelMap().keySet());
     }
 
     public static boolean checkAdminPermission(Set<String> orgIds, User user, ModelResp modelResp) {
@@ -534,7 +470,7 @@ public class ModelServiceImpl implements ModelService {
         return false;
     }
 
-    public static boolean checkViewerPermission(Set<String> orgIds, User user, ModelResp modelResp) {
+    public static boolean checkDataSeterPermission(Set<String> orgIds, User user, ModelResp modelResp) {
         if (checkAdminPermission(orgIds, user, modelResp)) {
             return true;
         }
@@ -559,32 +495,6 @@ public class ModelServiceImpl implements ModelService {
             }
         }
         return false;
-    }
-
-    @Override
-    public void getModelYamlTplByModelIds(Set<Long> modelIds, Map<String, List<DimensionYamlTpl>> dimensionYamlMap,
-            List<DataModelYamlTpl> dataModelYamlTplList, List<MetricYamlTpl> metricYamlTplList,
-            Map<Long, String> modelIdName) {
-        for (Long modelId : modelIds) {
-            ModelResp modelResp = getModel(modelId);
-            modelIdName.put(modelId, modelResp.getBizName());
-            MetaFilter metaFilter = new MetaFilter(Lists.newArrayList(modelId));
-            List<MetricResp> metricResps = metricService.getMetrics(metaFilter);
-            metricYamlTplList.addAll(MetricYamlManager.convert2YamlObj(metricResps));
-            Long databaseId = modelResp.getDatabaseId();
-            DatabaseResp databaseResp = databaseService.getDatabase(databaseId);
-            List<DimensionResp> dimensionResps = dimensionService.getDimensions(metaFilter);
-
-            dataModelYamlTplList.add(ModelYamlManager.convert2YamlObj(modelResp, databaseResp));
-            if (!dimensionYamlMap.containsKey(modelResp.getBizName())) {
-                dimensionYamlMap.put(modelResp.getBizName(), new ArrayList<>());
-            }
-            List<DimensionResp> dimensionRespList = dimensionResps.stream()
-                    .filter(d -> d.getModelBizName().equalsIgnoreCase(modelResp.getBizName()))
-                    .collect(Collectors.toList());
-            dimensionYamlMap.get(modelResp.getBizName()).addAll(DimensionYamlManager.convert2DimensionYaml(
-                    dimensionRespList));
-        }
     }
 
 }

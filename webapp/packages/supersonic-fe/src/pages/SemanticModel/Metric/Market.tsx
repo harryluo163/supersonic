@@ -1,6 +1,7 @@
-import type { ActionType, ProColumns } from '@ant-design/pro-table';
-import ProTable from '@ant-design/pro-table';
+import type { ActionType, ProColumns } from '@ant-design/pro-components';
+import { ProTable } from '@ant-design/pro-components';
 import { message, Space, Popconfirm, Tag, Spin, Tooltip } from 'antd';
+import MetricAddClass from './components/MetricAddClass';
 import React, { useRef, useState, useEffect } from 'react';
 import type { Dispatch } from 'umi';
 import { connect, history, useModel } from 'umi';
@@ -11,6 +12,8 @@ import {
   deleteMetric,
   batchUpdateMetricStatus,
   batchDownloadMetric,
+  batchMetricPublish,
+  batchMetricUnPublish,
 } from '../service';
 import MetricFilter from './components/MetricFilter';
 import MetricInfoCreateForm from '../components/MetricInfoCreateForm';
@@ -21,8 +24,7 @@ import moment from 'moment';
 import styles from './style.less';
 import { ISemantic } from '../data';
 import BatchCtrlDropDownButton from '@/components/BatchCtrlDropDownButton';
-import MetricStar from './components/MetricStar';
-import { ColumnsConfig } from '../components/MetricTableColumnRender';
+import { ColumnsConfig } from '../components/TableColumnRender';
 
 type Props = {
   dispatch: Dispatch;
@@ -65,6 +67,8 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
 
   const actionRef = useRef<ActionType>();
 
+  const [addClassVisible, setAddClassVisible] = useState<boolean>(false);
+
   useEffect(() => {
     queryMetricList(filterParams);
   }, []);
@@ -93,6 +97,7 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
       ...params,
       createdBy: params.onlyShowMe ? currentUser.name : null,
       pageSize: params.showType ? 100 : params.pageSize || pagination.pageSize,
+      isPublish: 1,
     });
     setLoading(false);
     const { list, pageSize, pageNum, total } = data || {};
@@ -160,46 +165,101 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
     setCreateModalVisible(true);
   };
 
+  const queryBatchUpdatePublish = async (ids: React.Key[], status: boolean) => {
+    if (Array.isArray(ids) && ids.length === 0) {
+      return;
+    }
+    const queryPublish = status ? batchMetricPublish : batchMetricUnPublish;
+    const { code, msg } = await queryPublish({
+      ids,
+    });
+    if (code === 200) {
+      queryMetricList(filterParams);
+      return;
+    }
+    message.error(msg);
+  };
+
+  const columnsConfig = ColumnsConfig();
+
   const columns: ProColumns[] = [
-    // {
-    //   dataIndex: 'id',
-    //   title: 'ID',
-    // },
+    {
+      dataIndex: 'id',
+      title: 'ID',
+      width: 80,
+      fixed: 'left',
+      search: false,
+    },
     {
       dataIndex: 'name',
       title: '指标',
-      render: ColumnsConfig.metricInfo.render,
+      // width: '20%',
+      width: 280,
+      fixed: 'left',
+      render: columnsConfig.indicatorInfo.render,
     },
+    // {
+    //   dataIndex: 'modelName',
+    //   title: '所属模型',
+    //   render: (_, record: any) => {
+    //     if (record.hasAdminRes) {
+    //       return (
+    //         <a
+    //           target="blank"
+    //           href={`/webapp/model/${record.domainId}/${record.modelId}/metric`}
+    //           // onClick={() => {
+    //           //   history.push(`/model/${record.domainId}/${record.modelId}/metric`);
+    //           // }}
+    //         >
+    //           {record.modelName}
+    //         </a>
+    //       );
+    //     }
+    //     return <> {record.modelName}</>;
+    //   },
+    // },
     {
-      dataIndex: 'modelName',
-      title: '所属模型',
-      render: (_, record: any) => {
-        if (record.hasAdminRes) {
-          return (
-            <a
-              target="blank"
-              href={`/webapp/model/${record.domainId}/${record.modelId}/metric`}
-              // onClick={() => {
-              //   history.push(`/model/${record.domainId}/${record.modelId}/metric`);
-              // }}
-            >
-              {record.modelName}
-            </a>
-          );
-        }
-        return <> {record.modelName}</>;
-      },
+      dataIndex: 'sensitiveLevel',
+      title: '敏感度',
+      // width: 150,
+      valueEnum: SENSITIVE_LEVEL_ENUM,
+      render: columnsConfig.sensitiveLevel.render,
+    },
+    // {
+    //   dataIndex: 'isPublish',
+    //   title: '是否发布',
+    //   width: 100,
+    //   search: false,
+    //   render: (isPublish) => {
+    //     switch (isPublish) {
+    //       case 0:
+    //         return '否';
+    //       case 1:
+    //         return <span style={{ color: '#1677ff' }}>是</span>;
+    //       default:
+    //         return <Tag color="default">未知</Tag>;
+    //     }
+    //   },
+    // },
+
+    {
+      dataIndex: 'description',
+      title: '描述',
+      search: false,
+      width: 300,
+      render: columnsConfig.description.render,
     },
     {
       dataIndex: 'status',
       title: '状态',
-      width: 120,
+      width: 180,
       search: false,
-      render: ColumnsConfig.state.render,
+      render: columnsConfig.state.render,
     },
     {
-      dataIndex: 'description',
-      title: '描述',
+      dataIndex: 'createdBy',
+      title: '创建人',
+      // width: 150,
       search: false,
     },
     {
@@ -214,6 +274,7 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
       title: '操作',
       dataIndex: 'x',
       valueType: 'option',
+      width: 180,
       render: (_, record) => {
         if (record.hasAdminRes) {
           return (
@@ -226,6 +287,25 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
               >
                 编辑
               </a>
+              {record.isPublish ? (
+                <a
+                  key="metricUnPublishBtn"
+                  onClick={() => {
+                    queryBatchUpdatePublish([record.id], false);
+                  }}
+                >
+                  下架
+                </a>
+              ) : (
+                <a
+                  key="metricPublishBtn"
+                  onClick={() => {
+                    queryBatchUpdatePublish([record.id], true);
+                  }}
+                >
+                  发布
+                </a>
+              )}
 
               <Popconfirm
                 title="确认删除？"
@@ -295,9 +375,6 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
       }
       setSelectedRowKeys(selectedRowKeys);
     },
-    // getCheckboxProps: (record: ISemantic.IMetricItem) => ({
-    //   disabled: !record.hasAdminRes,
-    // }),
   };
 
   const onMenuClick = (key: string) => {
@@ -307,6 +384,9 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
         break;
       case 'batchStop':
         queryBatchUpdateStatus(selectedRowKeys, StatusEnum.OFFLINE);
+        break;
+      case 'batchAddClass':
+        setAddClassVisible(true);
         break;
       default:
         break;
@@ -318,6 +398,21 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
       <div className={styles.metricFilterWrapper}>
         <MetricFilter
           initFilterValues={filterParams}
+          extraNode={
+            <BatchCtrlDropDownButton
+              key="ctrlBtnList"
+              downloadLoading={downloadLoading}
+              onDeleteConfirm={() => {
+                queryBatchUpdateStatus(selectedRowKeys, StatusEnum.DELETED);
+              }}
+              disabledList={hasAllPermission ? [] : ['batchStart', 'batchStop', 'batchDelete']}
+              extenderList={['batchAddClass']}
+              onMenuClick={onMenuClick}
+              onDownloadDateRangeChange={(searchDateRange, pickerType) => {
+                downloadMetricQuery(selectedRowKeys, searchDateRange, pickerType);
+              }}
+            />
+          }
           onFiltersChange={(_, values) => {
             if (_.showType !== undefined) {
               setLoading(true);
@@ -334,7 +429,7 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
               metricList={dataSource}
               disabledEdit={true}
               onMetricChange={(metricItem: ISemantic.IMetricItem) => {
-                history.push(`/metric/detail/${metricItem.modelId}/${metricItem.bizName}`);
+                history.push(`/metric/detail/${metricItem.id}`);
               }}
               onDeleteBtnClick={(metricItem: ISemantic.IMetricItem) => {
                 deleteMetricQuery(metricItem.id);
@@ -355,6 +450,7 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
             columns={columns}
             pagination={pagination}
             size="large"
+            scroll={{ x: 1500 }}
             tableAlertRender={() => {
               return false;
             }}
@@ -363,20 +459,6 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
               type: 'checkbox',
               ...rowSelection,
             }}
-            toolBarRender={() => [
-              <BatchCtrlDropDownButton
-                key="ctrlBtnList"
-                downloadLoading={downloadLoading}
-                onDeleteConfirm={() => {
-                  queryBatchUpdateStatus(selectedRowKeys, StatusEnum.DELETED);
-                }}
-                disabledList={hasAllPermission ? [] : ['batchStart', 'batchStop', 'batchDelete']}
-                onMenuClick={onMenuClick}
-                onDownloadDateRangeChange={(searchDateRange, pickerType) => {
-                  downloadMetricQuery(selectedRowKeys, searchDateRange, pickerType);
-                }}
-              />,
-            ]}
             loading={loading}
             onChange={(data: any) => {
               const { current, pageSize, total } = data;
@@ -388,7 +470,7 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
               setPagination(pagin);
               queryMetricList({ ...pagin, ...filterParams });
             }}
-            options={{ reload: false, density: false, fullScreen: false }}
+            options={false}
           />
         )}
       </>
@@ -431,6 +513,25 @@ const ClassMetricTable: React.FC<Props> = ({ domainManger, dispatch }) => {
           maskClosable={true}
           onNodeChange={({ eventName }: { eventName: string }) => {
             setInfoDrawerVisible(false);
+          }}
+        />
+      )}
+      {addClassVisible && (
+        <MetricAddClass
+          ids={selectedRowKeys as number[]}
+          createModalVisible={addClassVisible}
+          onCancel={() => {
+            setAddClassVisible(false);
+          }}
+          onSuccess={() => {
+            setAddClassVisible(false);
+            queryMetricList(filterParams);
+            dispatch({
+              type: 'domainManger/queryMetricList',
+              payload: {
+                domainId: selectDomainId,
+              },
+            });
           }}
         />
       )}

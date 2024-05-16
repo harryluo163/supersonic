@@ -35,18 +35,18 @@ const ROUTES = [
     envEnableList: [ENV_KEY.CHAT],
   },
   {
+    path: '/plugin',
+    name: 'plugin',
+    component: './ChatPlugin',
+    envEnableList: [ENV_KEY.CHAT],
+  },
+  {
     path: '/model/:domainId?/:modelId?/:menuKey?',
     component: './SemanticModel/DomainManager',
     name: 'semanticModel',
     envEnableList: [ENV_KEY.SEMANTIC],
   },
-  {
-    path: '/database',
-    name: 'database',
-    hideInMenu: true,
-    component: './SemanticModel/components/Database/DatabaseTable',
-    envEnableList: [ENV_KEY.SEMANTIC],
-  },
+
   {
     path: '/metric',
     name: 'metric',
@@ -72,18 +72,46 @@ const ROUTES = [
       },
     ],
   },
+
   {
-    path: '/plugin',
-    name: 'plugin',
-    component: './ChatPlugin',
-    envEnableList: [ENV_KEY.CHAT],
+    path: '/tag',
+    name: 'tag',
+    component: './SemanticModel/Insights',
+    envEnableList: [ENV_KEY.SEMANTIC],
+    routes: [
+      {
+        path: '/tag',
+        redirect: '/tag/market',
+      },
+      {
+        path: '/tag/market',
+        component: './SemanticModel/Insights/Market',
+        hideInMenu: true,
+        envEnableList: [ENV_KEY.SEMANTIC],
+      },
+      {
+        path: '/tag/detail/:tagId',
+        name: 'tagDetail',
+        hideInMenu: true,
+        component: './SemanticModel/Insights/Detail',
+        envEnableList: [ENV_KEY.SEMANTIC],
+      },
+    ],
   },
+
   {
     path: '/login',
     name: 'login',
     layout: false,
     hideInMenu: true,
     component: './Login',
+  },
+  {
+    path: '/database',
+    name: 'database',
+    // hideInMenu: true,
+    component: './SemanticModel/components/Database/DatabaseTable',
+    envEnableList: [ENV_KEY.SEMANTIC],
   },
   {
     path: '/system',

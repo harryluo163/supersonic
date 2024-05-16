@@ -10,10 +10,12 @@ import com.tencent.supersonic.headless.api.pojo.request.DomainReq;
 import com.tencent.supersonic.headless.api.pojo.request.DomainUpdateReq;
 import com.tencent.supersonic.headless.api.pojo.response.DomainResp;
 import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
+import com.tencent.supersonic.headless.api.pojo.response.DataSetResp;
 import com.tencent.supersonic.headless.server.persistence.dataobject.DomainDO;
 import com.tencent.supersonic.headless.server.persistence.repository.DomainRepository;
 import com.tencent.supersonic.headless.server.service.DomainService;
 import com.tencent.supersonic.headless.server.service.ModelService;
+import com.tencent.supersonic.headless.server.service.DataSetService;
 import com.tencent.supersonic.headless.server.utils.DomainConvert;
 import lombok.extern.slf4j.Slf4j;
 import org.assertj.core.util.Sets;
@@ -41,29 +43,34 @@ public class DomainServiceImpl implements DomainService {
     private final DomainRepository domainRepository;
     private final ModelService modelService;
     private final UserService userService;
+    private final DataSetService dataSetService;
 
 
     public DomainServiceImpl(DomainRepository domainRepository,
                              @Lazy ModelService modelService,
-                             UserService userService) {
+                             UserService userService,
+                             @Lazy DataSetService dataSetService) {
         this.domainRepository = domainRepository;
         this.modelService = modelService;
         this.userService = userService;
+        this.dataSetService = dataSetService;
     }
 
     @Override
-    public void createDomain(DomainReq domainReq, User user) {
+    public DomainResp createDomain(DomainReq domainReq, User user) {
         DomainDO domainDO = DomainConvert.convert(domainReq, user);
         domainDO.setStatus(StatusEnum.ONLINE.getCode());
         domainRepository.createDomain(domainDO);
+        return DomainConvert.convert(domainDO);
     }
 
     @Override
-    public void updateDomain(DomainUpdateReq domainUpdateReq, User user) {
+    public DomainResp updateDomain(DomainUpdateReq domainUpdateReq, User user) {
         domainUpdateReq.updatedBy(user.getName());
         DomainDO domainDO = getDomainDO(domainUpdateReq.getId());
         BeanMapper.mapper(domainUpdateReq, domainDO);
         domainRepository.updateDomain(domainDO);
+        return DomainConvert.convert(domainDO);
     }
 
     @Override
@@ -71,6 +78,12 @@ public class DomainServiceImpl implements DomainService {
         List<ModelResp> modelResps = modelService.getModelByDomainIds(Lists.newArrayList(id));
         if (!CollectionUtils.isEmpty(modelResps)) {
             throw new RuntimeException("该主题域下还存在模型, 暂不能删除, 请确认");
+        }
+        List<DomainResp> domainList = getDomainList();
+        for (DomainResp domainResp : domainList) {
+            if (id.equals(domainResp.getParentId())) {
+                throw new RuntimeException("该主题域下还存在子主题域, 暂不能删除, 请确认");
+            }
         }
         domainRepository.deleteDomain(id);
     }
@@ -94,10 +107,20 @@ public class DomainServiceImpl implements DomainService {
             List<Long> domainIds = domainWithAuthAll.stream().map(DomainResp::getId).collect(Collectors.toList());
             domainWithAuthAll.addAll(getParentDomain(domainIds));
         }
-        List<ModelResp> modelResps = modelService.getModelAuthList(user, AuthType.ADMIN);
+        List<ModelResp> modelResps = modelService.getModelAuthList(user, null, AuthType.ADMIN);
+        List<Long> domainIdsFromModel = modelResps.stream().map(ModelResp::getDomainId).collect(Collectors.toList());
         if (!CollectionUtils.isEmpty(modelResps)) {
-            List<Long> domainIds = modelResps.stream().map(ModelResp::getDomainId).collect(Collectors.toList());
+            domainWithAuthAll.addAll(getParentDomain(domainIdsFromModel));
+        }
+        List<DataSetResp> dataSetResps = dataSetService.getDataSets(user);
+        if (!CollectionUtils.isEmpty(dataSetResps)) {
+            List<Long> domainIds = dataSetResps.stream().map(DataSetResp::getDomainId).collect(Collectors.toList());
             domainWithAuthAll.addAll(getParentDomain(domainIds));
+        }
+        for (DomainResp domainResp : domainWithAuthAll) {
+            if (domainIdsFromModel.contains(domainResp.getId())) {
+                domainResp.setHasModel(true);
+            }
         }
         return new ArrayList<>(domainWithAuthAll).stream()
                 .sorted(Comparator.comparingLong(DomainResp::getId)).collect(Collectors.toList());
@@ -115,7 +138,7 @@ public class DomainServiceImpl implements DomainService {
         }
         if (authTypeEnum.equals(AuthType.VISIBLE)) {
             domainWithAuth = domainResps.stream()
-                    .filter(domainResp -> checkViewerPermission(orgIds, user, domainResp))
+                    .filter(domainResp -> checkDataSeterPermission(orgIds, user, domainResp))
                     .collect(Collectors.toList());
         }
         List<Long> domainIds = domainWithAuth.stream().map(DomainResp::getId)
@@ -243,7 +266,7 @@ public class DomainServiceImpl implements DomainService {
         return false;
     }
 
-    private boolean checkViewerPermission(Set<String> orgIds, User user, DomainResp domainDesc) {
+    private boolean checkDataSeterPermission(Set<String> orgIds, User user, DomainResp domainDesc) {
         List<String> admins = domainDesc.getAdmins();
         List<String> viewers = domainDesc.getViewers();
         List<String> adminOrgs = domainDesc.getAdminOrgs();

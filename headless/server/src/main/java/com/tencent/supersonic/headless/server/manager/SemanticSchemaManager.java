@@ -1,12 +1,12 @@
 package com.tencent.supersonic.headless.server.manager;
 
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.tencent.supersonic.common.pojo.ModelRela;
 import com.tencent.supersonic.common.pojo.enums.FilterOperatorEnum;
 import com.tencent.supersonic.headless.api.pojo.Field;
+import com.tencent.supersonic.headless.api.pojo.enums.TagDefineType;
 import com.tencent.supersonic.headless.api.pojo.response.DatabaseResp;
+import com.tencent.supersonic.headless.api.pojo.response.SemanticSchemaResp;
+import com.tencent.supersonic.headless.api.pojo.response.TagResp;
 import com.tencent.supersonic.headless.core.parser.calcite.s2sql.Constants;
 import com.tencent.supersonic.headless.core.parser.calcite.s2sql.DataSource;
 import com.tencent.supersonic.headless.core.parser.calcite.s2sql.DataType;
@@ -32,7 +32,6 @@ import com.tencent.supersonic.headless.server.pojo.yaml.MetricYamlTpl;
 import com.tencent.supersonic.headless.server.service.Catalog;
 import com.tencent.supersonic.headless.server.utils.DatabaseConverter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -41,15 +40,9 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Triple;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.annotation.EnableCaching;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -58,33 +51,25 @@ import org.springframework.util.CollectionUtils;
 @Service
 public class SemanticSchemaManager {
 
-    @Autowired
-    private LoadingCache<String, SemanticModel> loadingCache;
     private final Catalog catalog;
 
     public SemanticSchemaManager(Catalog catalog) {
         this.catalog = catalog;
     }
 
-    public SemanticModel reload(String rootPath) {
+    public SemanticModel getSemanticModel(SemanticSchemaResp semanticSchemaResp) {
         SemanticModel semanticModel = new SemanticModel();
-        semanticModel.setRootPath(rootPath);
-        Set<Long> modelIds = Arrays.stream(rootPath.split(",")).map(s -> Long.parseLong(s.trim()))
-                .collect(Collectors.toSet());
-        if (modelIds.isEmpty()) {
-            log.error("get modelIds empty {}", rootPath);
-            return semanticModel;
-        }
+        semanticModel.setSchemaKey(semanticSchemaResp.getSchemaKey());
         Map<String, List<DimensionYamlTpl>> dimensionYamlTpls = new HashMap<>();
         List<DataModelYamlTpl> dataModelYamlTpls = new ArrayList<>();
         List<MetricYamlTpl> metricYamlTpls = new ArrayList<>();
         Map<Long, String> modelIdName = new HashMap<>();
-        catalog.getModelYamlTplByModelIds(modelIds, dimensionYamlTpls, dataModelYamlTpls, metricYamlTpls, modelIdName);
-        DatabaseResp databaseResp = catalog.getDatabaseByModelId(modelIds.iterator().next());
+        catalog.getSchemaYamlTpl(semanticSchemaResp, dimensionYamlTpls,
+                dataModelYamlTpls, metricYamlTpls, modelIdName);
+        DatabaseResp databaseResp = semanticSchemaResp.getDatabaseResp();
         semanticModel.setDatabase(DatabaseConverter.convert(databaseResp));
-        List<ModelRela> modelRelas = catalog.getModelRela(new ArrayList<>(modelIds));
-        if (!CollectionUtils.isEmpty(modelRelas)) {
-            semanticModel.setJoinRelations(getJoinRelation(modelRelas, modelIdName));
+        if (!CollectionUtils.isEmpty(semanticSchemaResp.getModelRelas())) {
+            semanticModel.setJoinRelations(getJoinRelation(semanticSchemaResp.getModelRelas(), modelIdName));
         }
         if (!dataModelYamlTpls.isEmpty()) {
             Map<String, DataSource> dataSourceMap = dataModelYamlTpls.stream().map(SemanticSchemaManager::getDatasource)
@@ -104,13 +89,79 @@ public class SemanticSchemaManager {
         return semanticModel;
     }
 
-    public SemanticModel get(String rootPath) throws Exception {
-        rootPath = formatKey(rootPath);
-        SemanticModel schema = loadingCache.get(rootPath);
-        if (schema == null) {
-            return null;
+    public SemanticModel getTagSemanticModel(SemanticSchemaResp semanticSchemaResp) throws Exception {
+        if (CollectionUtils.isEmpty(semanticSchemaResp.getTags())) {
+            throw new Exception("semanticSchemaResp tag is empty");
         }
-        return schema;
+        SemanticModel semanticModel = getSemanticModel(semanticSchemaResp);
+        //Map<String, List<Dimension>> dimensions = new HashMap<>();
+        Map<Long, List<TagResp>> tagMap = new HashMap<>();
+        for (TagResp tagResp : semanticSchemaResp.getTags()) {
+            if (!tagMap.containsKey(tagResp.getModelId())) {
+                tagMap.put(tagResp.getModelId(), new ArrayList<>());
+            }
+            tagMap.get(tagResp.getModelId()).add(tagResp);
+        }
+        if (Objects.nonNull(semanticModel.getDatasourceMap()) && !semanticModel.getDatasourceMap().isEmpty()) {
+            for (Map.Entry<String, DataSource> entry : semanticModel.getDatasourceMap().entrySet()) {
+                List<Dimension> modelDimensions = new ArrayList<>();
+                if (!semanticModel.getDimensionMap().containsKey(entry.getKey())) {
+                    semanticModel.getDimensionMap().put(entry.getKey(), modelDimensions);
+                } else {
+                    modelDimensions = semanticModel.getDimensionMap().get(entry.getKey());
+                }
+                if (tagMap.containsKey(entry.getValue().getId())) {
+                    for (TagResp tagResp : tagMap.get(entry.getValue().getId())) {
+                        addTagModel(tagResp, modelDimensions, semanticModel.getMetrics());
+                    }
+                }
+            }
+        }
+
+        return semanticModel;
+    }
+
+    private void addTagModel(TagResp tagResp, List<Dimension> modelDimensions, List<Metric> modelMetrics)
+            throws Exception {
+        TagDefineType tagDefineType = TagDefineType.valueOf(tagResp.getTagDefineType());
+        switch (tagDefineType) {
+            case FIELD:
+            case DIMENSION:
+                if (TagDefineType.DIMENSION.equals(tagResp.getTagDefineType())) {
+                    Optional<Dimension> modelDimension = modelDimensions.stream()
+                            // .filter(d -> d.getBizName().equals(tagResp.getExpr()))
+                            .findFirst();
+                    if (modelDimension.isPresent()) {
+                        modelDimension.get().setName(tagResp.getBizName());
+                        return;
+                    }
+                }
+                Dimension dimension = Dimension.builder().build();
+                dimension.setType("");
+                //  dimension.setExpr(tagResp.getExpr());
+                dimension.setName(tagResp.getBizName());
+                dimension.setOwners("");
+                dimension.setBizName(tagResp.getBizName());
+                if (Objects.isNull(dimension.getDataType())) {
+                    dimension.setDataType(DataType.UNKNOWN);
+                }
+
+                DimensionTimeTypeParams dimensionTimeTypeParams = new DimensionTimeTypeParams();
+                dimension.setDimensionTimeTypeParams(dimensionTimeTypeParams);
+                modelDimensions.add(dimension);
+                return;
+            case METRIC:
+                Optional<Metric> modelMetric = modelMetrics.stream()
+                        // .filter(m -> m.getName().equalsIgnoreCase(tagResp.getExpr()))
+                        .findFirst();
+                if (modelMetric.isPresent()) {
+                    modelMetric.get().setName(tagResp.getBizName());
+                } else {
+                    throw new Exception(String.format("tag [{}] cant find the metric", tagResp.getBizName()));
+                }
+                return;
+            default:
+        }
     }
 
     public static List<Metric> getMetrics(final List<MetricYamlTpl> t) {
@@ -239,6 +290,9 @@ public class SemanticSchemaManager {
             if (Objects.isNull(dimension.getDataType())) {
                 dimension.setDataType(DataType.UNKNOWN);
             }
+            if (Objects.nonNull(dimensionYamlTpl.getExt())) {
+                dimension.setExt(dimensionYamlTpl.getExt());
+            }
             dimension.setDimensionTimeTypeParams(getDimensionTimeTypeParams(dimensionYamlTpl.getTypeParams()));
             dimensions.add(dimension);
         }
@@ -349,45 +403,6 @@ public class SemanticSchemaManager {
             }
         }
         metrics.addAll(metricYamlTpls);
-    }
-
-    public static String formatKey(String key) {
-        key = key.trim();
-        if (key.startsWith("/")) {
-            key = key.substring(1);
-        }
-        if (key.endsWith("/")) {
-            key = key.substring(0, key.length() - 1);
-        }
-        return key;
-    }
-
-    @Configuration
-    @EnableCaching
-    public class GuavaCacheConfig {
-
-        @Value("${parser.cache.saveMinute:1}")
-        private Integer saveMinutes = 1;
-        @Value("${parser.cache.maximumSize:1000}")
-        private Integer maximumSize = 1000;
-
-        @Bean
-        public LoadingCache<String, SemanticModel> getCache() {
-            LoadingCache<String, SemanticModel> cache
-                    = CacheBuilder.newBuilder()
-                    .expireAfterWrite(saveMinutes, TimeUnit.MINUTES)
-                    .initialCapacity(10)
-                    .maximumSize(maximumSize).build(
-                            new CacheLoader<String, SemanticModel>() {
-                                @Override
-                                public SemanticModel load(String key) {
-                                    log.info("load SemanticSchema [{}]", key);
-                                    return SemanticSchemaManager.this.reload(key);
-                                }
-                            }
-                    );
-            return cache;
-        }
     }
 
 }

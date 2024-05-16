@@ -4,15 +4,15 @@ import com.github.pagehelper.PageInfo;
 import com.tencent.supersonic.auth.api.authentication.pojo.User;
 import com.tencent.supersonic.auth.api.authentication.utils.UserHolder;
 import com.tencent.supersonic.common.pojo.enums.AuthType;
-import com.tencent.supersonic.headless.api.pojo.request.ModelSchemaFilterReq;
 import com.tencent.supersonic.headless.api.pojo.request.PageDimensionReq;
 import com.tencent.supersonic.headless.api.pojo.request.PageMetricReq;
 import com.tencent.supersonic.headless.api.pojo.request.SchemaItemQueryReq;
+import com.tencent.supersonic.headless.api.pojo.request.DataSetFilterReq;
 import com.tencent.supersonic.headless.api.pojo.response.DimensionResp;
 import com.tencent.supersonic.headless.api.pojo.response.DomainResp;
 import com.tencent.supersonic.headless.api.pojo.response.MetricResp;
 import com.tencent.supersonic.headless.api.pojo.response.ModelResp;
-import com.tencent.supersonic.headless.api.pojo.response.ModelSchemaResp;
+import com.tencent.supersonic.headless.api.pojo.response.DataSetSchemaResp;
 import com.tencent.supersonic.headless.server.service.SchemaService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,11 +34,8 @@ public class SchemaController {
     private SchemaService schemaService;
 
     @PostMapping
-    public List<ModelSchemaResp> fetchModelSchema(@RequestBody ModelSchemaFilterReq filter,
-            HttpServletRequest request,
-            HttpServletResponse response) {
-        User user = UserHolder.findUser(request, response);
-        return schemaService.fetchModelSchema(filter, user);
+    public List<DataSetSchemaResp> fetchDataSetSchema(@RequestBody DataSetFilterReq filter) {
+        return schemaService.fetchDataSetSchema(filter);
     }
 
     @GetMapping("/domain/list")
